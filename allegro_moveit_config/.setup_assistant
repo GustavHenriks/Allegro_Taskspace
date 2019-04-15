@@ -1,0 +1,11 @@
+moveit_setup_assistant_config:
+  URDF:
+    package: allegro_hand_description
+    relative_path: allegro_hand_description_left_iason.urdf
+    xacro_args: "--inorder "
+  SRDF:
+    relative_path: config/allegro_hand_left.srdf
+  CONFIG:
+    author_name: Farshad
+    author_email: farshad.khadivar@epfl.ch
+    generated_timestamp: 1554880366

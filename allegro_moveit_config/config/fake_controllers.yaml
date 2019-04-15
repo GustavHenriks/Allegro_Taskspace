@@ -1,0 +1,37 @@
+controller_list:
+  - name: fake_finger_0_controller
+    joints:
+      - joint_0
+      - joint_1
+      - joint_2
+      - joint_3
+  - name: fake_finger_1_controller
+    joints:
+      - joint_4
+      - joint_5
+      - joint_6
+      - joint_7
+  - name: fake_finger_2_controller
+    joints:
+      - joint_8
+      - joint_9
+      - joint_10
+      - joint_11
+  - name: fake_finger_3_controller
+    joints:
+      - joint_12
+      - joint_13
+      - joint_14
+      - joint_15
+  - name: fake_fingertip_0_controller
+    joints:
+      []
+  - name: fake_fingertip_1_controller
+    joints:
+      []
+  - name: fake_fingertip_2_controller
+    joints:
+      []
+  - name: fake_fingertip_3_controller
+    joints:
+      []
