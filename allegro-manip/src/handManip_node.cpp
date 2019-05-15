@@ -3,6 +3,9 @@
 // ################     Note On this Code #############################
 // Zero file of the allegro Hand has to be updated and corrected
 // The Torque mode Controller has no energy tank; for non-conservative Ds you may need this par
+// The gravity direction needs to be adjusted
+// cleaning the gravity compensation part
+//
 //#####################################################################
 
 int main (int argc, char **argv)
@@ -18,7 +21,7 @@ int main (int argc, char **argv)
     // you can use some if statements for having diffrent modes
 
     HandManip HandManip (n,frequency,controllerMode);
-
+ 
     // if (!HandManip.init())
     // {
     //     return -1;

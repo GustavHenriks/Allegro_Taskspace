@@ -92,7 +92,7 @@ endif()
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
-  CATKIN_DEPENDS roscpp rospy std_msgs message_generation moveit_core moveit_ros_planning passive_ds_control
+  CATKIN_DEPENDS roscpp rospy std_msgs message_generation moveit_core moveit_ros_planning passive_ds_control 
 #  DEPENDS system_lib
 )
 
@@ -117,9 +117,15 @@ include_directories(${EIGEN3_INCLUDE_DIR})
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 
+set(SDFAST "${CMAKE_CURRENT_SOURCE_DIR}/../allegro-InvDyn/sdfast/")
+
+include_directories (${CMAKE_CURRENT_SOURCE_DIR}/../allegro-InvDyn/include/)
+
+file(GLOB MODEL_SOURCES "${SDFAST}/*.c" "${CMAKE_CURRENT_SOURCE_DIR}/../allegro-InvDyn/src/*.cpp")
+
 
 #add_executable(hand_manip src/handManip_node.cpp src/HandManip.cpp src/Kinematic.cpp src/Fingers.cpp)
-add_executable(hand_manip src/handManip_node.cpp src/HandManip.cpp)
+add_executable(hand_manip src/handManip_node.cpp src/HandManip.cpp ${MODEL_SOURCES})
 target_link_libraries(hand_manip ${catkin_LIBRARIES})
 add_dependencies(hand_manip ${PROJECT_NAME}_gencpp)
 
@@ -183,6 +189,8 @@ add_dependencies(hand_manip ${PROJECT_NAME}_gencpp)
 # if(TARGET ${PROJECT_NAME}-test)
 #   target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
 # endif()
+
+
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)

@@ -1,0 +1,84 @@
+SD/FAST Information File: allegro_air.sd
+Generated 15-Apr-2019 14:28:10 by SD/FAST, Kane's formulation
+(sdfast B.2.8 #30123) on machine ID unknown
+
+ROADMAP (allegro_air.sd)
+
+Bodies          Inb
+No  Name        body Joint type  Coords q         Multipliers
+--- ----------- ---- ----------- ---------------- -----------------------
+ -1 $ground                                      |
+  0 palm_link    -1  Sixdof        0?  1?  2?    |
+                     ...           3?  4?  5? 22 |  0p  1p  2p  3p  4p  5p
+  1 link_0        0  Pin           6?            |  6p
+  2 link_1        1  Pin           7?            |  7p
+  3 link_2        2  Pin           8?            |  8p
+  4 link_3        3  Pin           9?            |  9p
+  5 link_3_tip    4  Weld                        |
+  6 link_12       0  Pin          10?            | 10p
+  7 link_13       6  Pin          11?            | 11p
+  8 link_14       7  Pin          12?            | 12p
+  9 link_15       8  Pin          13?            | 13p
+ 10 link_15_tip   9  Weld                        |
+ 11 link_4        0  Pin          14?            | 14p
+ 12 link_5       11  Pin          15?            | 15p
+ 13 link_6       12  Pin          16?            | 16p
+ 14 link_7       13  Pin          17?            | 17p
+ 15 link_7_tip   14  Weld                        |
+ 16 link_8        0  Pin          18?            | 18p
+ 17 link_9       16  Pin          19?            | 19p
+ 18 link_10      17  Pin          20?            | 20p
+ 19 link_11      18  Pin          21?            | 21p
+ 20 link_11_tip  19  Weld                        |
+
+
+STATE INDEX TO JOINT/AXIS MAP (allegro_air.sd)
+
+ Index
+  q|u   Joint  Axis   Joint type    Axis type    Joint Name
+ -----  -----  ----   -----------   ----------   ----------
+  0|23      0     0?  Sixdof        translate    
+  1|24      .     1?  .             translate 
+  2|25      .     2?  .             translate 
+  3|26      .     3?  .             quaternion
+  4|27      .     4?  .             quaternion
+  5|28      .     5?  .             quaternion
+  6|29      1     0?  Pin           rotate       
+  7|30      2     0?  Pin           rotate       
+  8|31      3     0?  Pin           rotate       
+  9|32      4     0?  Pin           rotate       
+ 10|33      6     0?  Pin           rotate       
+ 11|34      7     0?  Pin           rotate       
+ 12|35      8     0?  Pin           rotate       
+ 13|36      9     0?  Pin           rotate       
+ 14|37     11     0?  Pin           rotate       
+ 15|38     12     0?  Pin           rotate       
+ 16|39     13     0?  Pin           rotate       
+ 17|40     14     0?  Pin           rotate       
+ 18|41     16     0?  Pin           rotate       
+ 19|42     17     0?  Pin           rotate       
+ 20|43     18     0?  Pin           rotate       
+ 21|44     19     0?  Pin           rotate       
+ 22|        0     6   Sixdof        4th quat  
+   
+
+SYSTEM PARAMETERS (allegro_air.sd)
+
+Parameter  Value  Description
+
+nbod          21  no. bodies (also, no. of tree joints)
+njnt          21  total number of joints (tree+loop)
+ndof          22  no. degrees of freedom allowed by tree joints
+nloop          0  no. loop joints
+nldof          0  no. degrees of freedom allowed by loop joints
+
+nq            23  no. position coordinates in state (tree joints)
+nu            22  no. rate coordinates in state (tree joints)
+nlq            0  no. position coordinates describing loop joints
+nlu            0  no. rate coordinates describing loop joints
+
+nc            22  total no. constraints defined
+nlc            0  no. loop joint constraints
+npresc        22  no. prescribed motion constraints
+nuserc         0  no. user constraints
+

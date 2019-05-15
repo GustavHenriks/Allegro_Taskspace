@@ -43,13 +43,17 @@
 // Passive Ds 
 #include <passive_ds_controller.h>
 
+#include "Model.h"
+
 
 
 // #include "sg_filter.h"
 // #include "Workspace.h"
 
 #define DOF_JOINTS 16
-//#define TOTAL_NB_MARKERS 6
+#define TOTAL_NB_MARKERS 2
+#define AVERAGE_COUNT 100
+
 
 //-------------------------------
 //------- To Do List on Code----
@@ -69,6 +73,7 @@ class HandManip
     // I might use some enum here to classify the type of the motion 
     // like: num Mode {REACHING_GRASPING = 0, REACHING_GRASPING_MANIPULATING = 1};
     enum ControllerMode {Position_Mode = 0 , Torque_Mode = 1};
+    enum AttractorType { Stabilizer = 0 , Contributor = 1, Workspace = 2 };
   
   private:
     // ============================ Node Declaration ===============================
@@ -80,7 +85,7 @@ class HandManip
     // ============================ Subscriber Declaration ==========================
     ros::Subscriber _subJointSates;         //  Joint States of Allegro Hand
     //ros::Subscriber _subJointCmd;           // Joint Commands of Allegro Hand
-    // ros::Subscriber _subOptitrackPose[TOTAL_NB_MARKERS];  // optitrack markers pose
+    ros::Subscriber _subOptitrack[TOTAL_NB_MARKERS];  // optitrack markers pose
 
 
     // =========================== Publisher Declaration ============================
@@ -110,12 +115,14 @@ class HandManip
     float _desired_joint_torque[DOF_JOINTS]   = {0.0};
 
 
+
+
     //============================  Booleans ============================
     
-    // bool _firstOptitrackPose[TOTAL_NB_MARKERS];         // Monitor first optitrack markers update
+    bool _firstOptitrackPose[TOTAL_NB_MARKERS];         // Monitor first optitrack markers update
     // bool _firstDampingMatrix[NB_ROBOTS];                // Monitor first damping matrix update
     // bool _firstObjectPose;                              // Monitor first object pose update
-    // bool _optitrackOK;                                  // Check if all markers position is received
+    bool _optitrackOK;                                  // Check if all markers position is received
     // bool _wrenchBiasOK[NB_ROBOTS];                      // Check if computation of force/torque sensor bias is OK
     bool _stop;                                         // Check for CTRL+C
     // bool _objectGrasped;                                // Check if the object is grasped
@@ -124,15 +131,14 @@ class HandManip
 
 
     //============================  Optitrack variables ============================
-    // Eigen::Matrix<float,3,TOTAL_NB_MARKERS> _markersPosition;       // Markers position in optitrack frame
-    // Eigen::Matrix<float,3,TOTAL_NB_MARKERS> _markersPosition0;      // Initial markers position in opittrack frame
-    // Eigen::Matrix<uint32_t,TOTAL_NB_MARKERS,1> _markersSequenceID;  // Markers sequence ID
-    // Eigen::Matrix<uint16_t,TOTAL_NB_MARKERS,1> _markersTracked;     // Markers tracked state
-    // Eigen::Vector3f _p1;                                            // First marker position in the right robot frame
-    // Eigen::Vector3f _p2;                                            // Second marker position in the right robot frame
-    // Eigen::Vector3f _p3;                                            // Third marker position in the right robot frame
-    // Eigen::Vector3f _p4;                                            // Fourth marker position in the right robot frame
-    // Eigen::Vector3f _leftRobotOrigin;                               // Left robot basis position in the right robot frame
+    Eigen::Matrix<float,3,TOTAL_NB_MARKERS> _markersPosition;       // Markers position in optitrack frame
+    Eigen::Matrix<float,3,TOTAL_NB_MARKERS> _markersPosition0;      // Initial markers position in opittrack frame
+    Eigen::Matrix<uint32_t,TOTAL_NB_MARKERS,1> _markersSequenceID;  // Markers sequence ID
+    Eigen::Matrix<uint16_t,TOTAL_NB_MARKERS,1> _markersTracked;     // Markers tracked state
+    Eigen::Vector3f _p1;                                            // marker position in the right robot frame
+    
+    Eigen::Vector3f _baseRobotOrigin;
+    uint32_t _averageCount = 0;
     
     // ============================ Other Variables ============================
     std::mutex _mutex;
@@ -147,7 +153,11 @@ class HandManip
     double filterGain;
 
     //-Position Controller
-    double alphaGain;
+    double alphaGain0;
+    double alphaGain1;
+    double alphaGain2;
+    double alphaGain3;
+
     Eigen::Matrix3d dsGainMatrix_0;
     Eigen::Matrix3d dsGainMatrix_1;
     Eigen::Matrix3d dsGainMatrix_2;
@@ -159,6 +169,20 @@ class HandManip
     Eigen::VectorXd joint_command_finger_3;
 
     //-Torque Controller
+    float EPSILON_FORCE;
+    float LIMIT_FORCE;
+    float nullGainController;
+
+    Eigen::Vector4d _temp_joint_torque_0;
+    Eigen::Vector4d _temp_joint_torque_1;
+    Eigen::Vector4d _temp_joint_torque_2;
+    Eigen::Vector4d _temp_joint_torque_3;
+
+    float _null_joint_torque[DOF_JOINTS]       = {0.0};
+    float _null_joint_position[DOF_JOINTS]     = {0.0};
+
+    Cvector gravity;
+
 
     DSController * dsController_0;
     DSController * dsController_1;
@@ -238,9 +262,17 @@ class HandManip
     Eigen::MatrixXd JF_1;
     Eigen::MatrixXd JF_2;
     Eigen::MatrixXd JF_3;
-    
 
+    // Object Variables
+    AttractorType attractorType_0;
+    AttractorType attractorType_1;
+    AttractorType attractorType_2;
+    AttractorType attractorType_3;
 
+    Eigen::Vector3d X_Object_inRef;// Object position
+    Eigen::Vector3d V_Object_inRef;// Object velocity
+    Eigen::Vector4d Q_Object_inRef;// Object orientation
+    Eigen::Vector4d W_Object_inRef;// Object angular velocity
 
 
   public:
@@ -273,20 +305,28 @@ class HandManip
     void updateRefPosVel();
 
     // Computing the Desired States; or Dyn
+    void typeAttractors();
+    void setAttractors();
     void computeDS();
     
     // Publish data to topics
     void publishData();
 
     //=> Dit: Compute inital markers positon
-    //void optitrackInitialization();
-
+    void optitrackInitialization();
+    void updateOptitrack(const geometry_msgs::PoseStamped::ConstPtr& msg, int k)
+    uint16_t checkTrackedMarker(float a, float b);
+    
     void initializeKinemtic();
     void updateForwardKinematic();
     void updateJacobians();
     void gravityCompensation();
+    void nullSpaceControl();
     // void updateInverseKinematic();
 
+    // Object related functions
+    Eigen::Vector3d getObjectPosition();
+    Eigen::Vector4d getObjectOrientation();
 
 };
 
