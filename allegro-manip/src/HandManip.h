@@ -44,15 +44,17 @@
 #include <passive_ds_controller.h>
 
 #include "Model.h"
-
+#include "GraspMatrix.h"
 
 
 // #include "sg_filter.h"
 // #include "Workspace.h"
 
 #define DOF_JOINTS 16
+#define NB_Fingers 4
 #define TOTAL_NB_MARKERS 2
-#define AVERAGE_COUNT 100
+#define AVERAGE_COUNT 300
+
 
 
 //-------------------------------
@@ -63,6 +65,59 @@
 //-------------------------------
 
 typedef Eigen::Matrix<realtype,Eigen::Dynamic,1> Vec;
+enum AttractorType { Stabilizer = 0 , Contributor = 1, Workspace = 2 };
+
+struct Attractor
+{
+  Eigen::Vector3d onCall;
+  Eigen::Vector3d grasp;
+  Eigen::Vector3d updator;
+};
+
+struct Finger
+{
+    std::string name;                     // finger name
+    //-Position Controller
+    double dsGain;                     // for Ds generation
+    Eigen::Matrix3d dsGainMatrix;         // Matrix Gain of Ds
+    Eigen::VectorXd joint_command_finger; // joint Command for finger
+    
+    // Control
+    DSController * dsController;          // Passive Ds controller
+    float eigenValue;                     // Passive Ds gain
+    float eigenValue_dissipative;         // Dissipative gain
+    Eigen::VectorXd torque_command;       // Torquw Command
+    Eigen::Vector4d temp_joint_torque;    //
+
+    //-Position
+    Eigen::Vector3d X_inRef;              // fingertip positions in reference fram at hand root
+    Eigen::Vector3d X_target_inRef;       // fingertip target position in the reference frame 
+    Eigen::Vector3d X_dsGenerated_inRef;  //
+    Eigen::Vector3d X_rel_inRef;
+    Eigen::Vector3d X_inObj;
+
+    //-Velocity
+    Eigen::Vector3d V_inRef;              // fingertip velocity in reference fram at hand root
+    Eigen::Vector3d V_ds_inRef;           // velocity of the fingertip derived from the DS model
+    
+    //for filter
+    Eigen::Vector3d xp;                   // previous position
+    Eigen::Vector3d vp;                   // previous velocity
+
+    //-Jacobian
+
+    robot_state::JointModelGroup* joint_model_finger;
+    std::vector<double> joint_values_finger;
+    Eigen::MatrixXd jacobian_finger;
+    Eigen::MatrixXd JF;                   // Jacobian Matrix
+
+    AttractorType attractorType;          // Type of attractor for Ds
+    Eigen::Vector3d TargRelToObj;             // Relative distance
+    Attractor attractor;
+
+    bool inContact;
+    Eigen::Vector3d inForceDir;
+};
 
 class HandManip 
 {
@@ -73,7 +128,6 @@ class HandManip
     // I might use some enum here to classify the type of the motion 
     // like: num Mode {REACHING_GRASPING = 0, REACHING_GRASPING_MANIPULATING = 1};
     enum ControllerMode {Position_Mode = 0 , Torque_Mode = 1};
-    enum AttractorType { Stabilizer = 0 , Contributor = 1, Workspace = 2 };
   
   private:
     // ============================ Node Declaration ===============================
@@ -83,29 +137,23 @@ class HandManip
     float _dt;
 
     // ============================ Subscriber Declaration ==========================
-    ros::Subscriber _subJointSates;         //  Joint States of Allegro Hand
-    //ros::Subscriber _subJointCmd;           // Joint Commands of Allegro Hand
+    ros::Subscriber _subJointSates;                   // Joint States of Allegro Hand
+    //ros::Subscriber _subJointCmd;                   // Joint Commands of Allegro Hand
     ros::Subscriber _subOptitrack[TOTAL_NB_MARKERS];  // optitrack markers pose
-
 
     // =========================== Publisher Declaration ============================
     ros::Publisher _pubDesiredJointSates;         //  Joint States of Allegro Hand
     ros::Publisher _pubJointCmd;                  // Joint Commands of Allegro Hand for Position Mode
     ros::Publisher _pubTorqueCmd;                 // Torque Command for the Torque mode control
 
-
     // ============================ Messeges Declaration ============================
 
-    // geometry_msgs::Pose _msgRealPose;
-    // geometry_msgs::Pose _msgDesiredPose;
     sensor_msgs::JointState _msgRealJointStates;
     sensor_msgs::JointState _msgDesiredJointStates;
     sensor_msgs::JointState _msgJointCmd;
 
 
     // ============================ Variables Declartion ============================
-    
-
 
     float _current_joint_position[DOF_JOINTS] = {0.0};
     float _current_joint_velocity[DOF_JOINTS] = {0.0};
@@ -115,31 +163,41 @@ class HandManip
     float _desired_joint_torque[DOF_JOINTS]   = {0.0};
 
 
-
-
     //============================  Booleans ============================
-    
+
     bool _firstOptitrackPose[TOTAL_NB_MARKERS];         // Monitor first optitrack markers update
-    // bool _firstDampingMatrix[NB_ROBOTS];                // Monitor first damping matrix update
-    // bool _firstObjectPose;                              // Monitor first object pose update
     bool _optitrackOK;                                  // Check if all markers position is received
-    // bool _wrenchBiasOK[NB_ROBOTS];                      // Check if computation of force/torque sensor bias is OK
     bool _stop;                                         // Check for CTRL+C
-    // bool _objectGrasped;                                // Check if the object is grasped
-    // bool _objectReachable;                              // Check if object is reachable by both robots
-    // bool _goHome;                                       // check for goHome state (object not reachable+ not grasped)
-
-
+    bool _seqFlag;
+    bool _seq2Temp;
     //============================  Optitrack variables ============================
     Eigen::Matrix<float,3,TOTAL_NB_MARKERS> _markersPosition;       // Markers position in optitrack frame
     Eigen::Matrix<float,3,TOTAL_NB_MARKERS> _markersPosition0;      // Initial markers position in opittrack frame
     Eigen::Matrix<uint32_t,TOTAL_NB_MARKERS,1> _markersSequenceID;  // Markers sequence ID
     Eigen::Matrix<uint16_t,TOTAL_NB_MARKERS,1> _markersTracked;     // Markers tracked state
-    Eigen::Vector3f _p1;                                            // marker position in the right robot frame
+    Eigen::Vector3f _p1;                                            // marker position in the base frame
     
-    Eigen::Vector3f _baseRobotOrigin;
-    uint32_t _averageCount = 0;
+    Eigen::Matrix<float,4,TOTAL_NB_MARKERS> _markersOrientation;    // Markers orientation in optitrack frame
+    Eigen::Matrix<float,4,TOTAL_NB_MARKERS> _markersOrientation0;   // Markers orientation in optitrack frame
+    // Eigen::Vector3f _p2;                                         // marker position in th    
     
+    Eigen::Vector3f _p1f;                                           // marker position in the base frame
+    // Eigen::Vector3f _p2f;                                        // marker position in th    
+
+    Eigen::Matrix3f base2handRotation;                              // tranform matrix from base to hand frame
+
+    Eigen::Vector3d offsetHandOfBase;                               //
+    Eigen::Vector3f _baseOriginPosition;                            //
+    Eigen::Vector4f _baseOriginOrientation;                         //
+
+    Eigen::Vector4f _qo;                                            // object orientation world frame
+    Eigen::Vector4f _qb;                                            // base   orientation world frame
+    Eigen::Vector4f _qb2h;                                          // base to hand orientation world frame
+    Eigen::Vector4f _qo2h;                                          // object to hand orientation world frame
+ 
+    uint32_t _averageCount = 0;                                     //
+    
+    Eigen::Vector3d _objectCenter;                                  //
     // ============================ Other Variables ============================
     std::mutex _mutex;
 
@@ -152,146 +210,57 @@ class HandManip
     
     double filterGain;
 
-    //-Position Controller
-    double alphaGain0;
-    double alphaGain1;
-    double alphaGain2;
-    double alphaGain3;
-
-    Eigen::Matrix3d dsGainMatrix_0;
-    Eigen::Matrix3d dsGainMatrix_1;
-    Eigen::Matrix3d dsGainMatrix_2;
-    Eigen::Matrix3d dsGainMatrix_3;
-
-    Eigen::VectorXd joint_command_finger_0;
-    Eigen::VectorXd joint_command_finger_1;
-    Eigen::VectorXd joint_command_finger_2;
-    Eigen::VectorXd joint_command_finger_3;
+    // Fingers:
+    std::vector<Finger> _finger;
 
     //-Torque Controller
     float EPSILON_FORCE;
     float LIMIT_FORCE;
     float nullGainController;
-
-    Eigen::Vector4d _temp_joint_torque_0;
-    Eigen::Vector4d _temp_joint_torque_1;
-    Eigen::Vector4d _temp_joint_torque_2;
-    Eigen::Vector4d _temp_joint_torque_3;
+    float intForceContributor;
+    float intForceSrablizer;
 
     float _null_joint_torque[DOF_JOINTS]       = {0.0};
     float _null_joint_position[DOF_JOINTS]     = {0.0};
 
     Cvector gravity;
 
-
-    DSController * dsController_0;
-    DSController * dsController_1;
-    DSController * dsController_2;
-    DSController * dsController_3;
-
     int _dimX;
-    float _eigenValue_0 , _eigenValue_1 ,_eigenValue_2 ,_eigenValue_3;
-    float _eigenValue_dissipative_0;
-    float _eigenValue_dissipative_1;
-    float _eigenValue_dissipative_2;
-    float _eigenValue_dissipative_3;
-
-    Eigen::VectorXd _torque_command_0;
-    Eigen::VectorXd _torque_command_1;
-    Eigen::VectorXd _torque_command_2;
-    Eigen::VectorXd _torque_command_3;
-
-
-    //-Position
-    Eigen::Vector3d X0_current_inRef; // fingertip positions in reference fram at hand root
-    Eigen::Vector3d X1_current_inRef; // fingertip positions in reference fram at hand root
-    Eigen::Vector3d X2_current_inRef; // fingertip positions in reference fram at hand root
-    Eigen::Vector3d X3_current_inRef; // fingertip positions in reference fram at hand root
-
-    Eigen::Vector3d X0_target_inRef; // fingertip target position in the reference frame at hand root 
-    Eigen::Vector3d X1_target_inRef; // fingertip target position in the reference frame at hand root
-    Eigen::Vector3d X2_target_inRef; // fingertip target position in the reference frame at hand root
-    Eigen::Vector3d X3_target_inRef; // fingertip target position in the reference frame at hand root
-
-    Eigen::Vector3d X0_dsGenerated_inRef;
-    Eigen::Vector3d X1_dsGenerated_inRef;
-    Eigen::Vector3d X2_dsGenerated_inRef;
-    Eigen::Vector3d X3_dsGenerated_inRef;
-    
-    Eigen::Vector3d _x0p;
-    Eigen::Vector3d _x1p;
-    Eigen::Vector3d _x2p;
-    Eigen::Vector3d _x3p;
-
-    //-Velocity
-    Eigen::Vector3d V0_current_inRef; // fingertip velocity in reference fram at hand root
-    Eigen::Vector3d V1_current_inRef; // fingertip velocity in reference fram at hand root
-    Eigen::Vector3d V2_current_inRef; // fingertip velocity in reference fram at hand root
-    Eigen::Vector3d V3_current_inRef; // fingertip velocity in reference fram at hand root
-
-    Eigen::Vector3d V0_ds_inRef;     // velocity of the fingertip derived from the DS model
-    Eigen::Vector3d V1_ds_inRef;     // velocity of the fingertip derived from the DS model
-    Eigen::Vector3d V2_ds_inRef;     // velocity of the fingertip derived from the DS model
-    Eigen::Vector3d V3_ds_inRef;     // velocity of the fingertip derived from the DS model 
-
-    Eigen::Vector3d _v0p;
-    Eigen::Vector3d _v1p;
-    Eigen::Vector3d _v2p;
-    Eigen::Vector3d _v3p;
 
     //-Jacobian
     robot_state::RobotStatePtr kinematic_state;
     robot_model::RobotModelPtr kinematic_model;
+    double jacobPsudoInvGain;
 
-    robot_state::JointModelGroup* _joint_model_finger_0;
-    robot_state::JointModelGroup* _joint_model_finger_1;
-    robot_state::JointModelGroup* _joint_model_finger_2;
-    robot_state::JointModelGroup* _joint_model_finger_3;
-
-    std::vector<double> _joint_values_finger_0;
-    std::vector<double> _joint_values_finger_1;
-    std::vector<double> _joint_values_finger_2;
-    std::vector<double> _joint_values_finger_3;
-
-    Eigen::MatrixXd jacobian_finger_0;
-    Eigen::MatrixXd jacobian_finger_1;
-    Eigen::MatrixXd jacobian_finger_2;
-    Eigen::MatrixXd jacobian_finger_3;
-
-    Eigen::MatrixXd JF_0;
-    Eigen::MatrixXd JF_1;
-    Eigen::MatrixXd JF_2;
-    Eigen::MatrixXd JF_3;
 
     // Object Variables
-    AttractorType attractorType_0;
-    AttractorType attractorType_1;
-    AttractorType attractorType_2;
-    AttractorType attractorType_3;
+    Eigen::Vector3d X_Object_inRef;                                     // Object position
+    Eigen::Vector3d V_Object_inRef;                                     // Object velocity
+    Eigen::Vector4d Q_Object_inRef;                                     // Object orientation
+    Eigen::Vector4d W_Object_inRef;                                     // Object angular velocity
+    Eigen::Matrix3d objectRotationMatrix;
+    Eigen::Vector3d objectGraspPosition;
+    Eigen::Vector3d deltaObject;
 
-    Eigen::Vector3d X_Object_inRef;// Object position
-    Eigen::Vector3d V_Object_inRef;// Object velocity
-    Eigen::Vector4d Q_Object_inRef;// Object orientation
-    Eigen::Vector4d W_Object_inRef;// Object angular velocity
+    Eigen::Vector3d _objectInitialX;
+    double regionMargin;
+    int SEQ;
+    uint32_t _seqCount = 0;
 
 
+    // For the Grasp Matrix:
+    double _mu = 0.3;
   public:
 
     HandManip(ros::NodeHandle &n,double frequency, ControllerMode controllerMode);
-
     // initialize node
     bool init();
-
     // run node
     void run();
-
 
   private:
     //============================ Function Declaration ============================
 
-    // Callback called when CTRL is detected to stop the node		
-	  //static void stopNode(int sig);
-    
     // Compute command to be sent to the DS-impedance controller
     void computeCommand();
     void computeCommandPsMode();
@@ -302,11 +271,12 @@ class HandManip
     //void logData();
 
     void updateHandStates(const sensor_msgs::JointState &msg);
-    void updateRefPosVel();
+    void updateFingersPosVel();
 
     // Computing the Desired States; or Dyn
-    void typeAttractors();
+    void attractorsType();
     void setAttractors();
+    void graspInit();
     void computeDS();
     
     // Publish data to topics
@@ -314,18 +284,19 @@ class HandManip
 
     //=> Dit: Compute inital markers positon
     void optitrackInitialization();
-    void updateOptitrack(const geometry_msgs::PoseStamped::ConstPtr& msg, int k)
+    void updateOptitrack(const geometry_msgs::PoseStamped::ConstPtr& msg, int k);
     uint16_t checkTrackedMarker(float a, float b);
     
-    void initializeKinemtic();
+    void initializeKinematic();
     void updateForwardKinematic();
     void updateJacobians();
     void gravityCompensation();
     void nullSpaceControl();
+    void internalForceControl();
     // void updateInverseKinematic();
 
     // Object related functions
-    Eigen::Vector3d getObjectPosition();
+    void getObjectPose();
     Eigen::Vector4d getObjectOrientation();
 
 };
