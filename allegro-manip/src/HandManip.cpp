@@ -165,7 +165,7 @@ bool HandManip::init(){
    deltaObject.setConstant(0.0);
    regionMargin = 0.06;
    _seqFlag = false;
-   _seq2Temp = false;
+   _seqTempAtt = false;
    SEQ = 0;
    _seqCount = 0;
 
@@ -189,8 +189,8 @@ bool HandManip::init(){
    _null_joint_position[14]= 0.25;
    _null_joint_position[15]= 1.0;
 
-   intForceContributor  = 3.0;
-   intForceSrablizer    = 1.5;
+   intForceContributor  = 4.0;
+   intForceSrablizer    = 2.5;
 
    // initializing the passive Ds Controller
    _dimX = 3;
@@ -395,18 +395,19 @@ void HandManip::graspInit(){
    _finger[1].attractor.grasp << -0.01 , -0.010  , 0.0275;
 
    _finger[0].attractor.updator << -0.015  , -0.035  , 0.0275; // y was -0.025
+   _finger[0].attractor.updator << -0.015  , -0.080  , 0.01; // y was -0.025
    _finger[1].attractor.updator << -0.015  ,  -0.010  , 0.0275;
 
 
    // contributor finger
-   _finger[2].attractor.onCall << 0.0  , 0.04 , 0.05 ;
-   _finger[3].attractor.onCall <<-0.05 ,-0.10 ,-0.08 ;
+   _finger[2].attractor.onCall << 0.0  , 0.04 , 0.055 ;
+   _finger[3].attractor.onCall <<-0.05 ,-0.10 ,-0.085 ;
 
-   _finger[2].attractor.grasp << 0.015, 0.005  , 0.025 ;
-   _finger[3].attractor.grasp << 0.015, -0.010 , -0.025;
+   _finger[2].attractor.grasp << 0.015, 0.005  , 0.03 ;
+   _finger[3].attractor.grasp << 0.015, -0.010 , -0.03;
 
-   _finger[2].attractor.updator << 0.005, 0.035  , 0.09;
-   _finger[3].attractor.updator << -0.04 ,-0.10 ,-0.1;
+   _finger[2].attractor.updator << -0.015, 0.04  , 0.1;
+   _finger[3].attractor.updator << -0.04 ,-0.10 ,-0.11;
 
 }
 
@@ -424,6 +425,7 @@ void HandManip::attractorsType(){
       SEQ = 1;
       _seqCount =0;
       _seqFlag =false;
+      _seqTempAtt = false;
 
       _finger[0].attractorType = AttractorType::Workspace;
       _finger[1].attractorType = AttractorType::Workspace;
@@ -436,25 +438,22 @@ void HandManip::attractorsType(){
       _seqCount =0;
       _objectInitialX = X_Object_inRef; 
       _seqFlag =false;
-      _seq2Temp = false;
+      _seqTempAtt = false;
 
    }else if( _seqFlag && SEQ == 2 )
    { 
       SEQ = 3;
       _seqCount =0;
       _seqFlag =false;
-      _seq2Temp = false;
-      _finger[0].attractorType = AttractorType::Stabilizer;
-      _finger[1].attractorType = AttractorType::Stabilizer;
-      _finger[2].attractorType = AttractorType::Contributor;
-      _finger[3].attractorType = AttractorType::Stabilizer;
+      _seqTempAtt = false;
+      _seq3Temp = false;
    
-   }else if( _seqFlag && SEQ == 3 && ( _seqCount > AVERAGE_COUNT) )
+   }else if( _seqFlag && SEQ == 3 && ( _seqCount > AVERAGE_COUNT/4) )
    { 
       SEQ = 4;
       _seqCount =0;
       _seqFlag =false;
-      _seq2Temp = false;
+      _seqTempAtt = false;
 
       _finger[2].attractorType = AttractorType::Stabilizer;
 
@@ -463,6 +462,7 @@ void HandManip::attractorsType(){
       SEQ =0;
       _seqCount =0;
       _seqFlag =false;
+      _seqTempAtt = false;
    }
    //--------------------------------------------------------------------
    //--------SEQ 0
@@ -493,17 +493,17 @@ void HandManip::attractorsType(){
    //--------------------------------------------------------------------
    if (SEQ == 1){
       _finger[0].dsGain = 4; //7000 for position Mode Controller
-      _finger[1].dsGain = 4;
-      _finger[2].dsGain = 8;
-      _finger[3].dsGain = 8;
+      _finger[1].dsGain = 5;
+      _finger[2].dsGain = 10;
+      _finger[3].dsGain = 10;
 
-      _finger[0].eigenValue = 3.0;
+      _finger[0].eigenValue = 5.0;
       _finger[1].eigenValue = 5.0;
       _finger[2].eigenValue = 10.0;
-      _finger[3].eigenValue = 10.0;
+      _finger[3].eigenValue = 12.0;
 
-      _finger[0].eigenValue_dissipative = 3.0;
-      _finger[1].eigenValue_dissipative = 5.0;
+      _finger[0].eigenValue_dissipative = 5;
+      _finger[1].eigenValue_dissipative = 5;
       _finger[2].eigenValue_dissipative = 10.0;
       _finger[3].eigenValue_dissipative = 10.0;
 
@@ -512,28 +512,28 @@ void HandManip::attractorsType(){
    //--------SEQ 2
    //--------------------------------------------------------------------
    if (SEQ == 2){
-      _finger[0].dsGain = 8; //7000 for position Mode Controller
-      _finger[1].dsGain = 8;
+      _finger[0].dsGain = 4; //7000 for position Mode Controller
+      _finger[1].dsGain = 10;
       _finger[2].dsGain = 4;
-      _finger[3].dsGain = 8;
+      _finger[3].dsGain = 15;
 
       _finger[0].eigenValue = 5.0;
-      _finger[1].eigenValue = 7.5;
+      _finger[1].eigenValue = 7.0;
       _finger[2].eigenValue = 2;
-      _finger[3].eigenValue = 10.0;
+      _finger[3].eigenValue = 50.0;
 
-      _finger[0].eigenValue_dissipative = 5.0;
+      _finger[0].eigenValue_dissipative = 2.5;
       _finger[1].eigenValue_dissipative = 7.5;
       _finger[2].eigenValue_dissipative = 2;
-      _finger[3].eigenValue_dissipative = 10.0;
+      _finger[3].eigenValue_dissipative = 50.0;
 
    }
    //--------------------------------------------------------------------
    //--------SEQ 3
    //--------------------------------------------------------------------
    if (SEQ == 3){
-      _finger[0].dsGain = 8; //7000 for position Mode Controller
-      _finger[1].dsGain = 8;
+      _finger[0].dsGain = 4; //7000 for position Mode Controller
+      _finger[1].dsGain = 10;
       _finger[2].dsGain = 4;
       _finger[3].dsGain = 8;
 
@@ -552,9 +552,21 @@ void HandManip::attractorsType(){
    //--------SEQ 4
    //--------------------------------------------------------------------
    if (SEQ == 4){
-      _finger[2].dsGain = 8;
-      _finger[2].eigenValue = 12.0;
-      _finger[2].eigenValue_dissipative = 12.0;
+      _finger[2].dsGain = 6;
+      _finger[2].eigenValue = 10.0;
+      _finger[2].eigenValue_dissipative = 10.0;
+
+      _finger[0].dsGain = 4; //7000 for position Mode Controller
+      _finger[1].dsGain = 10;
+      _finger[3].dsGain = 10;
+
+      _finger[0].eigenValue = 5.0;
+      _finger[1].eigenValue = 7.5;
+      _finger[3].eigenValue = 10.0;
+
+      _finger[0].eigenValue_dissipative = 5.0;
+      _finger[1].eigenValue_dissipative = 7.5;
+      _finger[3].eigenValue_dissipative = 10.0;
 
    }
 
@@ -620,14 +632,22 @@ void HandManip::setAttractors(){
             _ta = 0.75 * _ta - 0.25 * _wrench;
             _ta = _ta.normalized();
             
-            _finger[i].X_target_inRef = objectGraspPosition  + 0.12 *_ta; //0.05
+            _finger[i].X_target_inRef = objectGraspPosition  + 0.125 *_ta; //0.05
 
 
             if ( _finger[i].V_inRef.norm() < 0.0075 ){
                seqFlacgCount +=2;
             } 
-         }else if (_finger[i].attractorType == Workspace){
-            _finger[i].X_target_inRef = objectGraspPosition + _finger[i].attractor.updator;
+         }else {
+            // _finger[0].X_target_inRef = objectGraspPosition + _finger[0].attractor.updator;
+            // _finger[1].X_target_inRef = objectGraspPosition + _finger[1].attractor.updator;
+
+            _finger[0].X_target_inRef = X_Object_inRef + _finger[0].attractor.updator;
+            _finger[1].X_target_inRef = X_Object_inRef + _finger[1].attractor.updator;
+
+            _finger[0].X_target_inRef = X_Object_inRef + _finger[0].attractor.updator;
+            _finger[1].X_target_inRef = objectGraspPosition + _finger[1].attractor.updator;
+
             // std::cout << "in the loop " << std::endl << std::endl;
          }
       }
@@ -643,96 +663,98 @@ void HandManip::setAttractors(){
    }else if (SEQ == 2)
    {
       for(int i =0; i< NB_Fingers; i++)
-      {
          _finger[i].inContact = true;
-         if (  _finger[1].X_rel_inRef[1] < 0)
-         {
-            if (i == 3 ){
-               //===> inc
-               _finger[i].TargRelToObj = 0.025 * ( X_Object_inRef - _finger[i].X_inRef).normalized();
-            
-            }else{
 
-               _finger[i].TargRelToObj =_finger[i].attractor.grasp ;
-               seqFlacgCount ++;
+      _finger[0].TargRelToObj =_finger[0].attractor.grasp ;
+      _finger[0].X_target_inRef = objectGraspPosition + _finger[0].TargRelToObj;
+      _finger[1].X_target_inRef =_finger[0].X_inRef;
 
-            }
-            // -> To be corrected
+      _finger[2].X_target_inRef[1] = _finger[2].X_inRef[1];
+      _finger[3].X_target_inRef[1] = 10 * objectGraspPosition[1];
 
-         }else if ( (X_Object_inRef - _objectInitialX ).norm() > 0.01 )
-         {
-               seqFlacgCount ++;
-               _seqCount ++;
-         }else{
-            seqFlacgCount +=4;
-         }
-         _finger[i].X_target_inRef = objectGraspPosition + _finger[i].TargRelToObj;
-
+      if ( _finger[1].X_rel_inRef[1] < -0.005 ){
+         seqFlacgCount += 4;
+         _seqCount ++;
       }
+
    //--------------------------------------------------------------------
    //--------SEQ 3
    //--------------------------------------------------------------------
    }else if (SEQ == 3){
       // -> HERE a learned Ds has to be implemented 
       // but just to tes this situation
-      seqFlacgCount ++;
-      for(int i =0; i< NB_Fingers; i++){
+      for(int i =0; i< NB_Fingers; i++)
+      {
+         _finger[i].inContact = true;
          if (i != 2){
-            _finger[i].inContact = true;
-
-            if (i==3 && !_seq2Temp){
-               _finger[i].inContact = false;
-               _finger[i].TargRelToObj =  _finger[i].attractor.updator;
-               if ((_finger[i].X_rel_inRef -_finger[i].TargRelToObj).norm() < 0.04){
-                  // std::cout << "SEQ 2 Flasg of the Attractor  " << std::endl;
-                  if ( _finger[i].V_inRef.norm() < 0.004)
-                     _seq2Temp = true;
-               }
-            }else {
-               _finger[i].TargRelToObj =_finger[i].attractor.grasp ;
-               if (i == 3 && ((_finger[i].X_rel_inRef - _finger[i].TargRelToObj).norm() < 0.04) ){
-                  seqFlacgCount ++;
-                  _seqCount ++;
-               }else if (i != 3){
-                  seqFlacgCount ++;
-                  _seqCount ++;
-
-               }
-            }
-            _finger[i].X_target_inRef = objectGraspPosition + _finger[i].TargRelToObj;
-
+            _finger[i].TargRelToObj =_finger[i].attractor.grasp ;
          }
       }
+
+      if (!_seq3Temp){
+         _finger[3].inContact = false;
+         _finger[3].TargRelToObj =  _finger[3].attractor.updator;
+         _finger[3].TargRelToObj[1] = 0;
+         if ((_finger[3].X_rel_inRef -_finger[3].TargRelToObj).norm() < 0.05){
+            // std::cout << "SEQ 2 Flasg of the Attractor  " << std::endl;
+            if (_seqTempAtt && _finger[2].V_inRef.norm() < 0.004)
+               _seq3Temp = true;
+         }
+      }
+
+      if (!_seqTempAtt){
+         _finger[3].inContact = false;
+         _finger[3].TargRelToObj =  _finger[3].attractor.updator;
+         if ((_finger[3].X_rel_inRef -_finger[3].TargRelToObj).norm() < 0.04){
+            // std::cout << "SEQ 2 Flasg of the Attractor  " << std::endl;
+            if ( _finger[3].V_inRef.norm() < 0.004)
+               _seqTempAtt = true;
+         }
+      }
+
+      for(int i =0; i< NB_Fingers; i++)
+         if (i != 2)
+            _finger[i].X_target_inRef = objectGraspPosition + _finger[i].TargRelToObj;
+
+
+      if (_seq3Temp && ((_finger[3].X_rel_inRef - _finger[3].TargRelToObj).norm() < 0.045) ){
+         seqFlacgCount += 4;
+         _seqCount ++;
+      }
+
    //--------------------------------------------------------------------
    //--------SEQ 4
    //--------------------------------------------------------------------
    }else if (SEQ == 4){
-      for(int i =0; i< NB_Fingers; i++){
-         _finger[i].inContact = true;
-   
-         if (i==2 && !_seq2Temp){
-            _finger[i].inContact = false;
-            _finger[i].TargRelToObj =  _finger[i].attractor.updator ;
-            if ((_finger[i].X_rel_inRef -_finger[i].TargRelToObj).norm() < 0.03){
-               // std::cout << "SEQ 2 Flasg of the Attractor  " << std::endl;
-               if ( _finger[i].V_inRef.norm() < 0.0075)
-                  _seq2Temp = true;
-            }
-   
-            // _firstTraget = (_finger[i].X_rel_inRef - _finger[i].TargRelToObj).norm();
-            // if (_firstTraget > 0.02)
-         }else {
-            _finger[i].TargRelToObj =_finger[i].attractor.grasp ;
-         }
-         _finger[i].X_target_inRef = objectGraspPosition + _finger[i].TargRelToObj;
 
-      if ((_finger[i].X_rel_inRef - _finger[i].TargRelToObj).norm() < 0.05 ){
-            seqFlacgCount ++;
-            _seqCount ++;
-            // std::cout << "seqFlacgCount =  " << seqFlacgCount << std::endl;
-            // std::cout << "seq counter   =  " << _seqCount << std::endl;
+      for(int i =0; i< NB_Fingers; i++)
+      {
+         _finger[i].inContact = true;
+         _finger[i].TargRelToObj =_finger[i].attractor.grasp ;
+   
       }
-      
+
+      if (!_seqTempAtt){
+         _finger[2].inContact = false;
+         _finger[2].TargRelToObj =  _finger[2].attractor.updator;
+         if ((_finger[2].X_rel_inRef -_finger[2].TargRelToObj).norm() < 0.04){
+            // std::cout << "SEQ 2 Flasg of the Attractor  " << std::endl;
+            if ( _finger[2].V_inRef.norm() < 0.004)
+               _seqTempAtt = true;
+         }
+      }
+
+      for(int i =0; i< NB_Fingers; i++)
+      {
+         _finger[i].X_target_inRef = objectGraspPosition + _finger[i].TargRelToObj;
+         if( i==2 )
+            _finger[i].X_target_inRef = X_Object_inRef + _finger[i].TargRelToObj;
+         if (_seqTempAtt && (_finger[i].X_rel_inRef - _finger[i].TargRelToObj).norm() < 0.04 ){
+               seqFlacgCount ++;
+               _seqCount ++;
+               // std::cout << "seqFlacgCount =  " << seqFlacgCount << std::endl;
+               // std::cout << "seq counter   =  " << _seqCount << std::endl;
+         }
       }
    }
 

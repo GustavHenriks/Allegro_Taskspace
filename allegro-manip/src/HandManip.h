@@ -169,7 +169,8 @@ class HandManip
     bool _optitrackOK;                                  // Check if all markers position is received
     bool _stop;                                         // Check for CTRL+C
     bool _seqFlag;
-    bool _seq2Temp;
+    bool _seqTempAtt;
+    bool _seq3Temp;
     //============================  Optitrack variables ============================
     Eigen::Matrix<float,3,TOTAL_NB_MARKERS> _markersPosition;       // Markers position in optitrack frame
     Eigen::Matrix<float,3,TOTAL_NB_MARKERS> _markersPosition0;      // Initial markers position in opittrack frame
