@@ -52,7 +52,7 @@
 
 #define DOF_JOINTS 16
 #define NB_Fingers 4
-#define TOTAL_NB_MARKERS 2
+#define TOTAL_NB_MARKERS 1
 #define AVERAGE_COUNT 300
 
 
@@ -66,13 +66,6 @@
 
 typedef Eigen::Matrix<realtype,Eigen::Dynamic,1> Vec;
 enum AttractorType { Stabilizer = 0 , Contributor = 1, Workspace = 2 };
-
-struct Attractor
-{
-  Eigen::Vector3d onCall;
-  Eigen::Vector3d grasp;
-  Eigen::Vector3d updator;
-};
 
 struct Finger
 {
@@ -91,10 +84,10 @@ struct Finger
 
     //-Position
     Eigen::Vector3d X_inRef;              // fingertip positions in reference fram at hand root
-    Eigen::Vector3d X_target_inRef;       // fingertip target position in the reference frame 
+    // Eigen::Vector3d X_target_inRef;       // fingertip target position in the reference frame 
     Eigen::Vector3d X_dsGenerated_inRef;  //
     Eigen::Vector3d X_rel_inRef;
-    Eigen::Vector3d X_inObj;
+    // Eigen::Vector3d X_inObj;
 
     //-Velocity
     Eigen::Vector3d V_inRef;              // fingertip velocity in reference fram at hand root
@@ -111,12 +104,6 @@ struct Finger
     Eigen::MatrixXd jacobian_finger;
     Eigen::MatrixXd JF;                   // Jacobian Matrix
 
-    AttractorType attractorType;          // Type of attractor for Ds
-    Eigen::Vector3d TargRelToObj;             // Relative distance
-    Attractor attractor;
-
-    bool inContact;
-    Eigen::Vector3d inForceDir;
 };
 
 class HandManip 
@@ -139,7 +126,7 @@ class HandManip
     // ============================ Subscriber Declaration ==========================
     ros::Subscriber _subJointSates;                   // Joint States of Allegro Hand
     //ros::Subscriber _subJointCmd;                   // Joint Commands of Allegro Hand
-    ros::Subscriber _subOptitrack[TOTAL_NB_MARKERS];  // optitrack markers pose
+    // ros::Subscriber _subOptitrack[TOTAL_NB_MARKERS];  // optitrack markers pose
 
     // =========================== Publisher Declaration ============================
     ros::Publisher _pubDesiredJointSates;         //  Joint States of Allegro Hand
@@ -218,8 +205,6 @@ class HandManip
     float EPSILON_FORCE;
     float LIMIT_FORCE;
     float nullGainController;
-    float intForceContributor;
-    float intForceSrablizer;
 
     float _null_joint_torque[DOF_JOINTS]       = {0.0};
     float _null_joint_position[DOF_JOINTS]     = {0.0};
@@ -235,22 +220,21 @@ class HandManip
 
 
     // Object Variables
-    Eigen::Vector3d X_Object_inRef;                                     // Object position
-    Eigen::Vector3d V_Object_inRef;                                     // Object velocity
-    Eigen::Vector4d Q_Object_inRef;                                     // Object orientation
-    Eigen::Vector4d W_Object_inRef;                                     // Object angular velocity
-    Eigen::Matrix3d objectRotationMatrix;
-    Eigen::Vector3d objectGraspPosition;
-    Eigen::Vector3d deltaObject;
+    // Eigen::Vector3d X_Object_inRef;                                     // Object position
+    // Eigen::Vector3d V_Object_inRef;                                     // Object velocity
+    // Eigen::Vector4d Q_Object_inRef;                                     // Object orientation
+    // Eigen::Vector4d W_Object_inRef;                                     // Object angular velocity
+    // Eigen::Matrix3d objectRotationMatrix;
+    // Eigen::Vector3d objectGraspPosition;
+    // Eigen::Vector3d deltaObject;
 
-    Eigen::Vector3d _objectInitialX;
-    double regionMargin;
-    int SEQ;
-    uint32_t _seqCount = 0;
+    // Eigen::Vector3d _objectInitialX;
+    // double regionMargin;
+    // int SEQ;
+    // uint32_t _seqCount = 0;
 
 
     // For the Grasp Matrix:
-    double _mu = 0.3;
   public:
 
     HandManip(ros::NodeHandle &n,double frequency, ControllerMode controllerMode);
@@ -275,9 +259,6 @@ class HandManip
     void updateFingersPosVel();
 
     // Computing the Desired States; or Dyn
-    void attractorsType();
-    void setAttractors();
-    void graspInit();
     void computeDS();
     
     // Publish data to topics
@@ -293,12 +274,11 @@ class HandManip
     void updateJacobians();
     void gravityCompensation();
     void nullSpaceControl();
-    void internalForceControl();
     // void updateInverseKinematic();
 
     // Object related functions
-    void getObjectPose();
-    Eigen::Vector4d getObjectOrientation();
+    // void getObjectPose();
+    // Eigen::Vector4d getObjectOrientation();
 
 };
 
