@@ -149,7 +149,8 @@ bool HandManip::init(){
    // filter section:
    filterGain = 0.2;
    // Object papram
-   _objectCenter = {-0.023  , 0.023   , -0.02}; // object center in Object Frame, Given Optitrack frame
+   _objectCenter = {-0.023  , 0.023   , -0.02}; // object Hand center in Object Frame, Given Optitrack frame
+   _objectCenter = {-0.03  , 0.020   , -0.025}; // object Hand2 center in Object Frame, Given Optitrack frame
    //             x ^      ________@
    //               |      | o   o |
    //               |      |   C o |
@@ -189,8 +190,8 @@ bool HandManip::init(){
    _null_joint_position[14]= 0.25;
    _null_joint_position[15]= 1.0;
 
-   intForceContributor  = 4.0;
-   intForceSrablizer    = 2.5;
+   intForceContributor  = 2.0;
+   intForceSrablizer    = 3.0;
 
    // initializing the passive Ds Controller
    _dimX = 3;
@@ -385,29 +386,29 @@ void HandManip::computeCommandTqMode(){
 void HandManip::graspInit(){
    
    // Support Fingers Index , Middle:
+ //--------------------------- sphere fingertip:-------------------
 
    // for stabilizing
    // supporter fingers
    _finger[0].attractor.onCall << 0.0  ,-0.05 , 0.03 ;
    _finger[1].attractor.onCall << 0.0  , 0.0 , 0.05 ;
 
-   _finger[0].attractor.grasp <<-0.01  , -0.025, -0.01 ; //0.0  , -0.0275, -0.01 ;
+   _finger[0].attractor.grasp <<-0.01 , -0.025, -0.01 ; //0.0  , -0.0275, -0.01 ;
    _finger[1].attractor.grasp << -0.01 , -0.010  , 0.0275;
 
-   _finger[0].attractor.updator << -0.015  , -0.035  , 0.0275; // y was -0.025
-   _finger[0].attractor.updator << -0.015  , -0.080  , 0.01; // y was -0.025
-   _finger[1].attractor.updator << -0.015  ,  -0.010  , 0.0275;
+   _finger[0].attractor.updator << -0.015 , -0.080  , 0.01; // y was -0.025
+   _finger[1].attractor.updator << -0.015 ,  -0.010  , 0.0275;
 
 
    // contributor finger
-   _finger[2].attractor.onCall << 0.0  , 0.04 , 0.055 ;
-   _finger[3].attractor.onCall <<-0.05 ,-0.10 ,-0.085 ;
+   _finger[2].attractor.onCall   << 0.0  , 0.04  , 0.055;
+   _finger[3].attractor.onCall   <<-0.05 ,-0.10  ,-0.085;
 
-   _finger[2].attractor.grasp << 0.015, 0.005  , 0.03 ;
-   _finger[3].attractor.grasp << 0.015, -0.010 , -0.03;
+   _finger[2].attractor.grasp    << 0.015, 0.005 , 0.03 ;
+   _finger[3].attractor.grasp    << 0.015,-0.010 ,-0.03 ;
 
-   _finger[2].attractor.updator << -0.015, 0.04  , 0.1;
-   _finger[3].attractor.updator << -0.04 ,-0.10 ,-0.11;
+   _finger[2].attractor.updator  <<-0.015, 0.04  , 0.1  ;
+   _finger[3].attractor.updator  <<-0.04 ,-0.10  ,-0.11 ;
 
 }
 
@@ -628,8 +629,14 @@ void HandManip::setAttractors(){
             _wrench = _wrench.normalized();
             Eigen::Vector3d _rotAxis= {-1.0, 0.0, 0.0 };
             Eigen::Vector3d _ta = _rotAxis.cross(_wrench);
+            Eigen::Vector3d _yAxis= {0.0, 1.0, 0.0 };
             _ta = _ta.normalized();
-            _ta = 0.75 * _ta - 0.25 * _wrench;
+            
+            if (i==3)
+              _ta = 0.8 * _ta - 0.1 * _wrench + 0.1 * _yAxis;
+            if(i==2)
+               _ta = 0.7 * _ta - 0.30 * _wrench;
+
             _ta = _ta.normalized();
             
             _finger[i].X_target_inRef = objectGraspPosition  + 0.125 *_ta; //0.05
@@ -850,7 +857,7 @@ void HandManip::internalForceControl(){
    if (SEQ == 1)
    {
       _finger[0].inForceDir = 0.001 * _finger[0].inForceDir;
-      _finger[1].inForceDir = 0.01 * _finger[1].inForceDir;
+      _finger[1].inForceDir = 0.005 * _finger[1].inForceDir;
       _finger[2].inForceDir = _finger[3].X_rel_inRef - _finger[2].X_rel_inRef;
       _finger[3].inForceDir = _finger[2].X_rel_inRef - _finger[3].X_rel_inRef;
       _intForceGain = intForceContributor;
