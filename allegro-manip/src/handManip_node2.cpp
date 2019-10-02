@@ -1,4 +1,4 @@
-#include "HandManip.h"
+#include "HandManip2.h"
 
 // ################     Note On this Code #############################
 // Zero file of the allegro Hand has to be updated and corrected
@@ -10,7 +10,7 @@
 
 int main (int argc, char **argv)
 {
-    ros::init(argc,argv, "hand_manip");
+    ros::init(argc,argv, "hand_manip2");
     ros::NodeHandle n;
     float frequency = 300.0f; //200.0f;
     HandManip::ControllerMode controllerMode;

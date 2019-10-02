@@ -17,7 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   moveit_core
   moveit_ros_planning
   passive_ds_control
-  utils
+  #utils
   #kdl_parser
 
 )
@@ -93,7 +93,7 @@ endif()
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
-  CATKIN_DEPENDS roscpp rospy std_msgs message_generation moveit_core moveit_ros_planning passive_ds_control GraspMatrix utils
+  CATKIN_DEPENDS roscpp rospy std_msgs message_generation moveit_core moveit_ros_planning passive_ds_control 
 #  DEPENDS system_lib
 )
 
@@ -125,10 +125,14 @@ include_directories (${CMAKE_CURRENT_SOURCE_DIR}/../allegro-InvDyn/include/)
 file(GLOB MODEL_SOURCES "${SDFAST}/*.c" "${CMAKE_CURRENT_SOURCE_DIR}/../allegro-InvDyn/src/*.cpp")
 
 
-#add_executable(hand_manip src/handManip_node.cpp src/HandManip.cpp src/Kinematic.cpp src/Fingers.cpp)
-add_executable(hand_manip src/handManip_node.cpp src/HandManip.cpp src/GraspMatrix.cpp ${MODEL_SOURCES})
+add_executable(hand_manip src/handManip_node.cpp src/HandManip.cpp ${MODEL_SOURCES})
+add_executable(hand_manip2 src/handManip_node2.cpp src/HandManip2.cpp ${MODEL_SOURCES})
 target_link_libraries(hand_manip ${catkin_LIBRARIES})
+target_link_libraries(hand_manip2 ${catkin_LIBRARIES})
+#target_link_libraries(hand_manip ${Model.h})
 add_dependencies(hand_manip ${PROJECT_NAME}_gencpp)
+add_dependencies(hand_manip2 ${PROJECT_NAME}_gencpp)
+
 
 
 

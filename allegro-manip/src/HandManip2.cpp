@@ -1,4 +1,4 @@
-#include "HandManip.h"
+#include "HandManip2.h"
 
 HandManip *HandManip::me = NULL;
 
@@ -38,7 +38,7 @@ HandManip::HandManip(ros::NodeHandle &n, double frequency, ControllerMode contro
 
    reference_point_position = {0.0, 0.0, 0.0};
    // reference pose
-   _gravity << 0.0f, 0.0f, -9.80665f;
+   _gravity << 9.80665f, 0.0f, 0.0f;
 
    // Optitrack
    for (int k = 0; k < TOTAL_NB_MARKERS; k++)
@@ -89,6 +89,7 @@ bool HandManip::init()
    _pubTorqueCmd = _n.advertise<sensor_msgs::JointState>("/allegroHand_0/torque_cmd", 1);
    _pubThumb = _n.advertise<std_msgs::Float64MultiArray>("/thumb_forces", 1);
    _pub_DesiredPath = _n.advertise<nav_msgs::Path>("/thumb_desired_path", 1);
+   _pubGrasp = _n.advertise<std_msgs::Int8>("/grasped", 1);
 
    //initialize the kinematic and jacobian solver
 
@@ -143,25 +144,42 @@ bool HandManip::init()
    _finger[3].X_target_inRef_orig = _finger[3].X_target_inRef;
 
    // Ds:
-   _finger[0].dsGain = 10; //5; //7000 for position Mode Controller
-   _finger[1].dsGain = 10; //10;
-   _finger[2].dsGain = 10; //12;
-   _finger[3].dsGain = 20; //20 used for admittance, 50 for circ
+   _finger[0].dsGain = 12; //5; //7000 for position Mode Controller
+   _finger[1].dsGain = 7;  //10;
+   _finger[2].dsGain = 7;  //12;
+   _finger[3].dsGain = 7; //20 used for admittance, 50 for circ
 
    // Sending a minimun force
 
    EPSILON_FORCE = 0.0001;
    LIMIT_FORCE = 5.00;
    jacobPsudoInvGain = 0.5;
-   nullGainController = 0.1;
+   nullGainController = 1.5;
    // Null Space Equib Joint Position
-   _null_joint_position[1] = 0.25;
-   _null_joint_position[5] = 0.75;
-   _null_joint_position[9] = 0.75;
-   _null_joint_position[12] = 1.254631573194332;
-   _null_joint_position[13] = 0.03;
-   _null_joint_position[14] = 0.21883507832878082;
-   _null_joint_position[15] = 1.13;
+   // _null_joint_position[1] = 0.25;
+   // _null_joint_position[5] = 0.75;
+   // _null_joint_position[9] = 0.75;
+   // _null_joint_position[12] = 1.254631573194332;
+   // _null_joint_position[13] = 0.03;
+   // _null_joint_position[14] = 0.21883507832878082;
+   // _null_joint_position[15] = 1.13;
+
+   _null_joint_position[1] = 0.75;
+   _null_joint_position[2] = 0.2;
+   _null_joint_position[3] = 0.0;
+
+   // _null_joint_position[5] = 0.55;
+   // _null_joint_position[6] = 0.55;
+   // _null_joint_position[7] = 0.55;
+
+   // _null_joint_position[9] = 0.55;
+   // _null_joint_position[10] = 0.55;
+   // _null_joint_position[11] = 0.55;
+
+   _null_joint_position[13] = 1.58;
+   _null_joint_position[13] = -0.2;
+   _null_joint_position[14] = 0.55;
+   _null_joint_position[15] = 0.55;
 
    // _finger[i].temp_joint_torque[j] += (double)(-1 * nullGainController / 10000 * (_current_joint_velocity[j + 4 * i]));
 
@@ -192,6 +210,10 @@ bool HandManip::init()
    start_circle = false;
    _start = false;
    _contact_force.setZero();
+
+   _grasp_offset = 0;
+   _target_grasped = false;
+   _grasp_published = false;
 }
 
 //======================================================================================================//
@@ -234,7 +256,6 @@ void HandManip::run()
             // ROS_INFO_STREAM_THROTTLE(0.05, "Finger 4 X target : " << _finger[3].X_inRef[0] << _finger[3].X_inRef[1] << _finger[3].X_inRef[2] << " " << _force_term << " " << _theta_circle);
             // ROS_INFO_STREAM_THROTTLE(1, "Gain increased : " << _start);
 
-
             // updateTarget();
             updateTargetCirc();
             computeCommand();
@@ -244,6 +265,7 @@ void HandManip::run()
             // publishTargetOnTF();
             computeForce();
             publishThumb();
+            // std::cout<<"oh"<<std::endl;
             // PublishFuturePath();
 
             //-----------------------------------------//
@@ -323,11 +345,10 @@ void HandManip::computeDS()
    if (start_circle)
    {
       // std::cout << "Overwriting" << std::endl;
-      _force_term = 0.015 * cos((_theta_circle)/ 2);
+      _force_term = 0.015 * cos((_theta_circle) / 2);
       // std::cout << _force_term << std::endl;
       _finger[3].V_ds_inRef << 10 * (_finger[3].X_target_inRef[0] - _force_term - _finger[3].X_inRef[0]), _new_ds;
       // _finger[3].V_ds_inRef << 10 * (_finger[3].X_target_inRef[0] - _force_term + _current_joint_torque[15] * 5.1385/30 - _finger[3].X_inRef[0]), _new_ds;
-
 
       // _contact_force[0] =   (.1/ 5.1385);// * cos(_theta_circle+M_PI);
       // if(_contact_force[0] < 0)
@@ -365,7 +386,7 @@ void HandManip::computeCommandTqMode()
    // -> update ensuring passivity
    // -> update ignoring the passivity (energy tank) : not now
 
-   for (int i = 0; i < NB_Fingers - 1; i++)
+   for (int i = 0; i < NB_Fingers; i++)
    {
       _finger[i].dsController->Update(_finger[i].V_inRef, _finger[i].V_ds_inRef);
       _finger[i].torque_command = _finger[i].JF.transpose() * _finger[i].dsController->control_output();
@@ -374,25 +395,28 @@ void HandManip::computeCommandTqMode()
       // std::cout<<_finger[i].desired_force<<std::endl;
    }
 
-   if (_start == true)
-   {
-      // _finger[3].torque_command = 0.8 * _finger[3].torque_command;
-      // _finger[3].torque_command += 0.2 * _finger[3].JF.transpose() * (-16 * (_finger[3].V_inRef - _finger[3].V_ds_inRef));
+   // if (start_circle == true)
+   // {
+   //    // _finger[3].torque_command = 0.8 * _finger[3].torque_command;
+   //    // _finger[3].torque_command += 0.2 * _finger[3].JF.transpose() * (-16 * (_finger[3].V_inRef - _finger[3].V_ds_inRef));
 
-      // _finger[3].torque_command = _finger[3].JF.transpose() * ((-40-5*cos(_theta_circle / 2+M_PI/4)) * (_finger[3].V_inRef - _finger[3].V_ds_inRef) + _contact_force); //-32 used before
-      // std::cout<<(-40-5*cos(_theta_circle / 2+M_PI/4))<<std::endl;
-      _finger[3].torque_command = _finger[3].JF.transpose() * (-35* (_finger[3].V_inRef - _finger[3].V_ds_inRef) + _contact_force); //-32 used before
-   }
-   else
-   {
-      _finger[3].torque_command = _finger[3].JF.transpose() * (-5 * (_finger[3].V_inRef - _finger[3].V_ds_inRef));
-   }
+   //    // _finger[3].torque_command = _finger[3].JF.transpose() * ((-40-5*cos(_theta_circle / 2+M_PI/4)) * (_finger[3].V_inRef - _finger[3].V_ds_inRef) + _contact_force); //-32 used before
+   //    // std::cout<<(-40-5*cos(_theta_circle / 2+M_PI/4))<<std::endl;
+   //    _finger[3].torque_command = _finger[3].JF.transpose() * (-35 * (_finger[3].V_inRef - _finger[3].V_ds_inRef) + _contact_force); //-32 used before
+   // }
+   // else
+   // {
+   //    // _finger[0].torque_command = _finger[0].JF.transpose() * (-3 * (_finger[0].V_inRef - _finger[0].V_ds_inRef));
+   //    // _finger[1].torque_command = _finger[1].JF.transpose() * (-3 * (_finger[1].V_inRef - _finger[1].V_ds_inRef));
+   //    // _finger[2].torque_command = _finger[2].JF.transpose() * (-3 * (_finger[2].V_inRef - _finger[2].V_ds_inRef));
+   //    _finger[3].torque_command = _finger[3].JF.transpose() * (-5 * (_finger[3].V_inRef - _finger[3].V_ds_inRef));
+   // }
    // correcting for the motor gain
 
-   _finger[3].torque_command[0] = 0.4 * _finger[3].torque_command[0];
-   _finger[3].torque_command[1] = 0.5 * _finger[3].torque_command[1];
-   _finger[3].torque_command[2] = 0.75 * _finger[3].torque_command[2];
-   _finger[3].torque_command[3] = 2 * _finger[3].torque_command[3];
+   // _finger[3].torque_command[0] = 0.4 * _finger[3].torque_command[0];
+   // _finger[3].torque_command[1] = 0.5 * _finger[3].torque_command[1];
+   // _finger[3].torque_command[2] = 0.75 * _finger[3].torque_command[2];
+   // _finger[3].torque_command[3] = 2 * _finger[3].torque_command[3];
    // for (int i = 0; i < 4; i++)
    // {
    //    if (fabs(_finger[3].torque_command[i]) < 0.01)
@@ -426,10 +450,16 @@ void HandManip::computeCommandTqMode()
    // gravity compensation tunning gain
 
    // hand tunning: Because of joint hystersis friction
-   gravity[1 + 6] = gravity[1 + 6] * 1.5;   // index finger
-   gravity[5 + 6] = gravity[5 + 6] * 2.5;   // middle finger
+   // gravity[1 + 6] = gravity[1 + 6] * 1.5;   // index finger
+   // gravity[5 + 6] = gravity[5 + 6] * 2.5;   // middle finger
+   // gravity[9 + 6] = gravity[9 + 6] * 3.5;   // pinky finger
+   // gravity[14 + 6] = gravity[14 + 6] * 2.0; // thumb finger
+   gravity[1 + 6] = gravity[1 + 6] * 3;     // index finger
+   gravity[5 + 6] = gravity[5 + 6] * 3.2;   // middle finger
    gravity[9 + 6] = gravity[9 + 6] * 3.5;   // pinky finger
-   gravity[14 + 6] = gravity[14 + 6] * 2.0; // thumb finger
+   gravity[12 + 6] = gravity[12 + 6] * 1.5; // thumb finger
+   gravity[13 + 6] = gravity[13 + 6] * 1.2; // thumb finger
+   gravity[14 + 6] = gravity[14 + 6] * 4;   // thumb finger
 
    for (int i = 0; i < DOF_JOINTS; i++)
    {
@@ -522,6 +552,9 @@ void HandManip::nullSpaceControl()
    }
 
    for (int j = 0; j < DOF_JOINTS; j++)
+      // if (j==13)
+      //    _desired_joint_torque[j] += 0;
+      // else
       _desired_joint_torque[j] += _null_joint_torque[j];
 }
 
@@ -558,6 +591,9 @@ void HandManip::publishData()
    {
       _msgDesiredJointStates.position[i] = _desired_joint_position[i];
       // _msgDesiredJointStates.velocity[i] = _desired_joint_velocity[i];
+      // if (i==0 | i==1 | i==2 | i==3)
+      //    _msgDesiredJointStates.effort[i]=0;
+      // else
       _msgDesiredJointStates.effort[i] = _desired_joint_torque[i];
    }
    //  _pubDesiredJointSates.publish(_msgDesiredJointStates);
@@ -914,91 +950,169 @@ void HandManip::admittanceControl()
 // Test for DS for circular motions.
 void HandManip::updateTargetCirc()
 {
+   // target_0 = {0.089, -0.023, 0.256};
+   // target_1 = {0.059, 0.0085, 0.286};
+   // target_2 = {0.059, 0.0478, 0.286};
+   // target_3 = {0.118, -0.005, 0.01};
+   target_0 = {0.0595334-0.0303174, -0.02275253-0.02, 0.1236488+0.0641293};
+   target_1 = {0.0595334-0.0303174, 0.00851324,  0.1236488+0.0641293};
+   target_2 = {0.0595334-0.0303174, 0.0478584,   0.1236488+0.0641293};
+   target_3 = {0.0898508+0.0303174, -0.0386293+0.02, 0.0595195-0.0641293};
+   target_dir = (target_0-target_3)*10;
+
    if (_grab == 1 && _grab_received == 1)
    {
-      _finger[0].X_target_inRef = {0.15334-0.12, -0.02275253, 0.14836488};
-      _finger[1].X_target_inRef = {0.1109154-0.05, 0.00851324, 0.146488};
-      _finger[2].X_target_inRef = {0.1407702-0.11, 0.0478584, 0.1463102};
-      _finger[3].X_target_inRef = {0.1586801, -0.03905, -0.0230309};
+      // _finger[0].X_target_inRef = {0.13334 - 0.07, -0.02275253, 0.168};
+      // _finger[0].X_target_inRef = {0.059154, -0.02275253, 0.286488};
+      // _finger[1].X_target_inRef = {0.059154, 0.00851324, 0.286488};
+      // _finger[2].X_target_inRef = {0.057702, 0.0478584, 0.2863102};
+      // _finger[1].X_target_inRef = {0.13334 - 0.07, 0.00851324, 0.14836488};
+      // _finger[2].X_target_inRef = {0.13334 - 0.07, 0.0478584, 0.14836488};
+      // _finger[3].X_target_inRef = {0.1486801 - 0.06, -0.005, 0.01};
+      _finger[0].X_target_inRef = target_0;
+      _finger[1].X_target_inRef = target_1;
+      _finger[2].X_target_inRef = target_2;
+      _finger[3].X_target_inRef = target_3;      
       _grab_received = 0;
       _start = false;
       start_circle = false;
+      _grasp_published = false;
+      _target_grasped = false;
       _count = 0;
+      _count_grasp = 0;
    }
    else if (_grab == 1 && _grab_received == 0 && _start == false)
    {
       _count++;
       if (_count >= 50)
       {
-         _finger[3].X_target_inRef = {0.1038508, -0.0586293, 0.0595195};
+         // _finger[3].X_target_inRef = {0.1038508, -0.0586293, 0.0595195};
          if (_count >= 100)
          {
             _start = true;
+            _grasp_offset = 0;
          }
       }
    }
    else if (_grab == 0)
    {
-      _finger[0].X_target_inRef = {0.15334, -0.02275253, 0.14836488};
-      _finger[1].X_target_inRef = {0.1109154, 0.00851324, 0.146488};
-      _finger[2].X_target_inRef = {0.1407702, 0.0478584, 0.1463102};
-      _finger[3].X_target_inRef = {0.0086801, -0.153905, -0.0230309};
+
+      // _finger[0].X_target_inRef = {0.13334 - 0.07, -0.02275253, 0.168};
+      // _finger[0].X_target_inRef = {0.079154, -0.02275253, 0.206488};
+      // _finger[1].X_target_inRef = {0.059154, 0.00851324, 0.286488};
+      // _finger[2].X_target_inRef = {0.057702, 0.0478584, 0.2863102};
+      // _finger[1].X_target_inRef = {0.13334 - 0.07, 0.00851324, 0.14836488};
+      // _finger[2].X_target_inRef = {0.13334 - 0.07, 0.0478584, 0.14836488};
+      // _finger[3].X_target_inRef = {0.1486801 - 0.06, -0.005, 0.01};
+      _finger[0].X_target_inRef = target_0;
+      _finger[1].X_target_inRef = target_1;
+      _finger[2].X_target_inRef = target_2;
+      _finger[3].X_target_inRef = target_3;
+      ROS_INFO_STREAM_THROTTLE(1, _finger[3].X_inRef[2]);
+
       ;
       start_circle = false;
       _start = false;
    }
-   else if (_grab == 1 && _grab_received == 0 && _start == true)
-   { 
-      // _finger[0].X_target_inRef = {0.0795334, -0.02275253, 0.0836488};
-      // _finger[1].X_target_inRef = {0.0789154, 0.00851324, 0.0836488};
-      // _finger[2].X_target_inRef = {0.0607702, 0.0478584, 0.0563102};
-      start_circle = true;
-      tf::Transform transform, transform2;
-      tf::Quaternion q;
-      Eigen::Vector2d x;
-      // x = Eigen::Vector2d(_finger[3].X_inRef[1] - _finger[3].X_target_inRef_orig[1], _finger[3].X_inRef[2] - _finger[3].X_target_inRef_orig[2]);
-      _filtered_thumb_pos = 0.99 * _filtered_thumb_pos + 0.01 * _finger[3].X_inRef;
-      x = Eigen::Vector2d(_filtered_thumb_pos[1] - _finger[3].X_target_inRef_orig[1], _filtered_thumb_pos[2] - _finger[3].X_target_inRef_orig[2]);
-      // x =Eigen::Vector2d(_finger[3].X_inRef[1] - _finger[3].X_target_inRef_orig[1], _finger[3].X_inRef[2] - _finger[3].X_target_inRef_orig[2]);
-      // std::cout << "X" << x << std::endl;
-      ds(x, 0.005);
-      // _new_ds(0)=0;
-      // _new_ds(1)=0;
-      _next_x = _finger[3].X_target_inRef_orig[0];
-      // _next_y = _finger[3].X_target_inRef_orig[1];
-      // _next_z = _finger[3].X_target_inRef_orig[2];
-      _next_y = _finger[3].X_target_inRef_orig[1] + _new_ds(0);
-      _next_z = _finger[3].X_target_inRef_orig[2] + _new_ds(1);
-      // std::cout << _next_x <<" "<<_next_y<<" "<<_next_z<<std::endl;
-      // std::cout << "New_Ds " << _new_ds(0) <<" "<<_new_ds(1)<<std::endl;
-
-      _next_vec = tf::Vector3(_next_x, _next_y, _next_z);
-      _next_vec = _next_vec.rotate(tf::Vector3(0, 1, 0), 0);
-      _next_vec_e = Eigen::Vector3d(_next_vec);
-      // transform.setOrigin(_next_vec);
-      // q.setRotation(tf::Vector3(0, 1, 0), 0);
-      // transform2.setRotation(q);
-      // transform2.setOrigin(_next_vec);
-      // transform = transform2 * transform;
-      _dif = _next_vec_e - _old_vec_e;
-      // std::cout<<_dif[0]<<_dif[1]<<_dif[2]<<std::endl;
-      // _dif=_dif.norm();
-      // std::cout<<_dif.norm()<<std::endl;
-      double cutoff = 0.1;
-      if (_dif.norm() > cutoff)
+   else if (_grab == 1 && _grab_received == 0 && _start == true && _target_grasped == false)
+   {
+      if (_current_joint_torque[15] < 0.15)
       {
-         _next_vec_e = _next_vec_e / _next_vec_e.norm() * cutoff;
+         if (_count >= 10)
+         {
+            _grasp_offset += 0.0005;
+            _count = 0;
+         }
+         // _finger[0].X_target_inRef = {0.13334 - 0.07, -0.02275253, 0.168 - _grasp_offset};
+         // target_0[2] = target_0[2] - _grasp_offset;
+         // target_3[1] = target_3[1] - _grasp_offset / 2;
+         // target_3[2] = target_3[2] + _grasp_offset;
+         // _finger[0].X_target_inRef = {0.059154, -0.02275253, 0.286488 - _grasp_offset};
+         // _finger[1].X_target_inRef = {0.13334 - 0.07, 0.00851324, 0.14836488 - _grasp_offset};
+         // _finger[2].X_target_inRef = {0.13334 - 0.07, 0.0478584, 0.14836488 - _grasp_offset};
+         // _finger[3].X_target_inRef = {0.1486801 - 0.06, -0.005-_grasp_offset/2, 0.01 + _grasp_offset};
+         _finger[0].X_target_inRef = target_0-target_dir*_grasp_offset;
+         _finger[1].X_target_inRef = target_1;
+         _finger[2].X_target_inRef = target_2;
+         _finger[3].X_target_inRef = target_3+target_dir*_grasp_offset;
+
+         ROS_INFO_STREAM_THROTTLE(0.1, _finger[3].X_inRef[2] << " " << _finger[3].X_target_inRef[2]);
+         ROS_INFO_STREAM_THROTTLE(0.1, _current_joint_torque[3] << " " << _current_joint_torque[15]);
+         _count += 1;
       }
-      _old_vec_e = _next_vec_e;
-
-      // std::cout<<_dif[0]<<_dif[1]<<_dif[2]<<std::endl;
-      // _finger[3].X_target_inRef[0] = _next_vec_e[0];
-      // _finger[3].X_target_inRef[1] = _next_vec_e[1];
-      // _finger[3].X_target_inRef[2] = _next_vec_e[2];
-      // std::cout << _finger[3].X_target_inRef[0] <<" "<<_finger[3].X_target_inRef[1]<<" "<<_finger[3].X_target_inRef[2]<<std::endl;
-
-      _theta = _theta + 0.01;
+      else
+      {
+         _target_grasped = true;
+      }
    }
+   else if (_grab == 1 && _grab_received == 0 && _start == true && _target_grasped == true)
+   {
+      if (_grasp_published == false)
+      {
+         if (_count_grasp <= 50)
+         {
+            _grasped_msg.data = 1;
+            _pubGrasp.publish(_grasped_msg);
+            _count_grasp += 1;
+         }
+         else
+         {
+            _grasp_published = true;
+            _count_grasp = 0;
+         }
+      }
+   }
+
+   // // _finger[0].X_target_inRef = {0.0795334, -0.02275253, 0.0836488};
+   // // _finger[1].X_target_inRef = {0.0789154, 0.00851324, 0.0836488};
+   // // _finger[2].X_target_inRef = {0.0607702, 0.0478584, 0.0563102};
+   // start_circle = true;
+   // tf::Transform transform, transform2;
+   // tf::Quaternion q;
+   // Eigen::Vector2d x;
+   // // x = Eigen::Vector2d(_finger[3].X_inRef[1] - _finger[3].X_target_inRef_orig[1], _finger[3].X_inRef[2] - _finger[3].X_target_inRef_orig[2]);
+   // _filtered_thumb_pos = 0.99 * _filtered_thumb_pos + 0.01 * _finger[3].X_inRef;
+   // x = Eigen::Vector2d(_filtered_thumb_pos[1] - _finger[3].X_target_inRef_orig[1], _filtered_thumb_pos[2] - _finger[3].X_target_inRef_orig[2]);
+   // // x =Eigen::Vector2d(_finger[3].X_inRef[1] - _finger[3].X_target_inRef_orig[1], _finger[3].X_inRef[2] - _finger[3].X_target_inRef_orig[2]);
+   // // std::cout << "X" << x << std::endl;
+   // ds(x, 0.005);
+   // // _new_ds(0)=0;
+   // // _new_ds(1)=0;
+   // _next_x = _finger[3].X_target_inRef_orig[0];
+   // // _next_y = _finger[3].X_target_inRef_orig[1];
+   // // _next_z = _finger[3].X_target_inRef_orig[2];
+   // _next_y = _finger[3].X_target_inRef_orig[1] + _new_ds(0);
+   // _next_z = _finger[3].X_target_inRef_orig[2] + _new_ds(1);
+   // // std::cout << _next_x <<" "<<_next_y<<" "<<_next_z<<std::endl;
+   // // std::cout << "New_Ds " << _new_ds(0) <<" "<<_new_ds(1)<<std::endl;
+
+   // _next_vec = tf::Vector3(_next_x, _next_y, _next_z);
+   // _next_vec = _next_vec.rotate(tf::Vector3(0, 1, 0), 0);
+   // _next_vec_e = Eigen::Vector3d(_next_vec);
+   // // transform.setOrigin(_next_vec);
+   // // q.setRotation(tf::Vector3(0, 1, 0), 0);
+   // // transform2.setRotation(q);
+   // // transform2.setOrigin(_next_vec);
+   // // transform = transform2 * transform;
+   // _dif = _next_vec_e - _old_vec_e;
+   // // std::cout<<_dif[0]<<_dif[1]<<_dif[2]<<std::endl;
+   // // _dif=_dif.norm();
+   // // std::cout<<_dif.norm()<<std::endl;
+   // double cutoff = 0.1;
+   // if (_dif.norm() > cutoff)
+   // {
+   //    _next_vec_e = _next_vec_e / _next_vec_e.norm() * cutoff;
+   // }
+   // _old_vec_e = _next_vec_e;
+
+   // // std::cout<<_dif[0]<<_dif[1]<<_dif[2]<<std::endl;
+   // // _finger[3].X_target_inRef[0] = _next_vec_e[0];
+   // // _finger[3].X_target_inRef[1] = _next_vec_e[1];
+   // // _finger[3].X_target_inRef[2] = _next_vec_e[2];
+   // // std::cout << _finger[3].X_target_inRef[0] <<" "<<_finger[3].X_target_inRef[1]<<" "<<_finger[3].X_target_inRef[2]<<std::endl;
+
+   // _theta = _theta + 0.01;
+   // }
 }
 void HandManip::ds(Eigen::Vector2d x, double r_value)
 {
@@ -1037,7 +1151,7 @@ void HandManip::publishPosition()
 
 void HandManip::publishThumb()
 {
-   std::vector<double> force = {_force_term*45, _current_joint_torque[15] * 5.1385, _finger[3].torque_command[0], _finger[3].torque_command[1], _finger[3].torque_command[2], _finger[3].torque_command[3]};
+   std::vector<double> force = {_force_term * 45, _current_joint_torque[15] * 5.1385, _finger[3].torque_command[0], _finger[3].torque_command[1], _finger[3].torque_command[2], _finger[3].torque_command[3]};
    // std::cout<<force[1]<<" "<<_current_joint_torque[15] * 5.1385<<std::endl;
    // set up dimensions
    // _thumb_msg.layout.dim.push_back(std_msgs::MultiArrayDimension());
@@ -1180,62 +1294,55 @@ float HandManip::deadzone(float input, float disturbance, float threshold)
 void HandManip::PublishFuturePath()
 {
 
+   // setting the header of the path
+   _msg_DesiredPath.header.stamp = ros::Time::now();
+   _msg_DesiredPath.header.frame_id = "palm_link";
 
+   Eigen::Vector3d simulated_pose;
+   Eigen::Vector3d simulated_vel;
+   Eigen::Vector2d simulated_ds;
 
-    // setting the header of the path
-    _msg_DesiredPath.header.stamp = ros::Time::now();
-    _msg_DesiredPath.header.frame_id = "palm_link";
+   simulated_vel.resize(3);
+   simulated_pose.resize(3);
 
-    Eigen::Vector3d simulated_pose;
-    Eigen::Vector3d simulated_vel;
-    Eigen::Vector2d simulated_ds;
-
-    simulated_vel.resize(3);
-    simulated_pose.resize(3);
-
-    simulated_ds=Eigen::Vector2d(_filtered_thumb_pos[1] - _finger[3].X_target_inRef_orig[1], _filtered_thumb_pos[2] - _finger[3].X_target_inRef_orig[2]);
-    ds_simulation(simulated_ds,0.005);
+   simulated_ds = Eigen::Vector2d(_filtered_thumb_pos[1] - _finger[3].X_target_inRef_orig[1], _filtered_thumb_pos[2] - _finger[3].X_target_inRef_orig[2]);
+   ds_simulation(simulated_ds, 0.005);
 
    //  simulated_pose = real_pose_;
-    // simulated_pose = Vector3d(transform_.getOrigin().x(),transform_.getOrigin().y(),transform_.getOrigin().z());
-    simulated_pose <<0,0,0;
+   // simulated_pose = Vector3d(transform_.getOrigin().x(),transform_.getOrigin().y(),transform_.getOrigin().z());
+   simulated_pose << 0, 0, 0;
 
+   for (int frame = 0; frame < _MAX_FRAME; frame++)
+   {
 
-    for (int frame = 0; frame < _MAX_FRAME; frame++)
-    {
-       
-        simulated_vel << (_finger[3].X_target_inRef[0] - _force_term - _finger[3].X_inRef[0]), _new_ds_simulation;
+      simulated_vel << (_finger[3].X_target_inRef[0] - _force_term - _finger[3].X_inRef[0]), _new_ds_simulation;
 
-        if(simulated_vel.norm() > 0.15){
-        	simulated_vel = simulated_vel / simulated_vel.norm()  * 0.15;
-        }
+      if (simulated_vel.norm() > 0.15)
+      {
+         simulated_vel = simulated_vel / simulated_vel.norm() * 0.15;
+      }
 
-        simulated_pose[0] +=  simulated_vel[0] * _dt * 4;
-        simulated_pose[1] +=  simulated_vel[1] * _dt * 4;
-        simulated_pose[2] +=  simulated_vel[2] * _dt * 4;
+      simulated_pose[0] += simulated_vel[0] * _dt * 4;
+      simulated_pose[1] += simulated_vel[1] * _dt * 4;
+      simulated_pose[2] += simulated_vel[2] * _dt * 4;
 
-        _msg_DesiredPath.poses[frame].header.stamp = ros::Time::now();
+      _msg_DesiredPath.poses[frame].header.stamp = ros::Time::now();
       //   _msg_DesiredPath.poses[frame].header.stamp = ros::Time(0);
-      //   _msg_DesiredPath.poses[frame].header.frame_id = "iiwa_link_ee";        
+      //   _msg_DesiredPath.poses[frame].header.frame_id = "iiwa_link_ee";
       // //   msg_DesiredPath_.poses[frame].header.frame_id = "SVR";
       // //   msg_DesiredPath_.poses[frame].header.frame_id = "finger3";
       //   _msg_DesiredPath.poses[frame].pose.position.x = simulated_pose[0];
       //   _msg_DesiredPath.poses[frame].pose.position.y = simulated_pose[1];
       //   _msg_DesiredPath.poses[frame].pose.position.z = simulated_pose[2];
-         std::cout<<_msg_DesiredPath<<std::endl;
+      std::cout << _msg_DesiredPath << std::endl;
       //   _pub_DesiredPath.publish(_msg_DesiredPath);
-
-
-    }
-
-
+   }
 }
-
 
 void HandManip::ds_simulation(Eigen::Vector2d x, double r_value)
 {
 
-   double r,theta_circle, theta_circle_dot, r_dot, x_dot, y_dot, limit;
+   double r, theta_circle, theta_circle_dot, r_dot, x_dot, y_dot, limit;
    Eigen::Vector2d v;
    theta_circle = atan2(x(1), x(0));
    r = sqrt(pow(x(0), 2) + pow(x(1), 2));

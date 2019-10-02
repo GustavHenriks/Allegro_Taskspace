@@ -1,0 +1,12 @@
+<launch> 
+
+
+
+<node pkg="tf" type="static_transform_publisher" name="Baptiste" args="0 0 0 0 1.57 0 /baptiste/frame1 /baptiste/frame2 100"/>
+
+<node pkg="tf" type="static_transform_publisher" name="Saurav" args="0 0 0 0 1.57 0 /saurav/frame1 /saurav/frame2 100"/>
+
+<node pkg="tf" type="static_transform_publisher" name="connector" args="0 0 0 0 1.57 0 /saurav/frame2 /baptiste/frame1 100"/>
+
+
+</launch>

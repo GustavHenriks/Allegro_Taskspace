@@ -1,5 +1,5 @@
-#ifndef __HAND_MANIP_H__
-#define __HAND_MANIP_H__
+#ifndef __HAND_MANIP2_H__
+#define __HAND_MANIP2_H__
 
 #include <mutex>
 #include <fstream>
@@ -24,11 +24,13 @@
 // #include "force_based_ds_modulation/objectGrasping_paramsConfig.h"
 
 #include "std_msgs/Float32MultiArray.h"
+#include "std_msgs/Float64MultiArray.h"
 #include "std_msgs/String.h"
 #include "std_msgs/Float32.h"
 #include "std_msgs/Float64.h"
+#include "std_msgs/Int8.h"
 #include "sensor_msgs/JointState.h"
-
+#include "nav_msgs/Path.h"
 
 #include "Eigen/Eigen"
 
@@ -44,8 +46,10 @@
 #include <passive_ds_controller.h>
 
 #include "Model.h"
-#include "GraspMatrix.h"
 
+// Gustav
+#include <tf/transform_broadcaster.h>
+#include <math.h>
 
 // #include "sg_filter.h"
 // #include "Workspace.h"
@@ -81,10 +85,13 @@ struct Finger
     float eigenValue_dissipative;         // Dissipative gain
     Eigen::VectorXd torque_command;       // Torquw Command
     Eigen::Vector4d temp_joint_torque;    //
+    double desired_force;        // desired force for the torque
+
 
     //-Position
     Eigen::Vector3d X_inRef;              // fingertip positions in reference fram at hand root
-    // Eigen::Vector3d X_target_inRef;       // fingertip target position in the reference frame 
+    Eigen::Vector3d X_target_inRef;       // fingertip target position in the reference frame 
+    Eigen::Vector3d X_target_inRef_orig;  // original fingertip target position in the reference frame 
     Eigen::Vector3d X_dsGenerated_inRef;  //
     Eigen::Vector3d X_rel_inRef;
     // Eigen::Vector3d X_inObj;
@@ -125,6 +132,7 @@ class HandManip
 
     // ============================ Subscriber Declaration ==========================
     ros::Subscriber _subJointSates;                   // Joint States of Allegro Hand
+    ros::Subscriber _subGrab;                         // Subscriber for grab topic for hand
     //ros::Subscriber _subJointCmd;                   // Joint Commands of Allegro Hand
     // ros::Subscriber _subOptitrack[TOTAL_NB_MARKERS];  // optitrack markers pose
 
@@ -233,6 +241,39 @@ class HandManip
     // int SEQ;
     // uint32_t _seqCount = 0;
 
+     // ============================ Gustav Variables ============================
+    double _theta,_theta_circle;
+    tf::TransformBroadcaster _br;
+    double _next_x, _next_y, _next_z;
+    tf::Vector3 _next_vec;
+    Eigen::Vector2d _new_ds;
+    Eigen::Vector3d _next_vec_e;
+    Eigen::Vector3d _old_vec_e;
+    Eigen::Vector3d _dif;
+    int _grab, _grab_received, _count;
+    double _admittance, _x_error, _f_error, _target_force;
+    bool start_circle, _start;
+    std_msgs::Float64MultiArray _thumb_msg;
+    ros::Publisher _pubThumb; 
+    Eigen::Vector3d _filtered_thumb_pos;
+    Eigen::Vector3d _contact_force;
+    double _force_term;
+    
+    nav_msgs::Path _msg_DesiredPath;
+    ros::Publisher _pub_DesiredPath;
+    int _MAX_FRAME = 100;
+    // float _old_effort[DOF_JOINTS] = {0.0};
+    Eigen::Vector2d _new_ds_simulation;
+
+
+    // Grasping
+    double _grasp_offset;
+    bool _target_grasped, _grasp_published;
+    ros::Publisher _pubGrasp;
+    int _count_grasp;
+    std_msgs::Int8 _grasped_msg;
+    Eigen::Vector3d target_0,target_1,target_2,target_3;
+    Eigen::Vector3d target_dir;
 
     // For the Grasp Matrix:
   public:
@@ -275,6 +316,23 @@ class HandManip
     void gravityCompensation();
     void nullSpaceControl();
     // void updateInverseKinematic();
+
+    // New additions - Gustav
+    void updateTarget();
+    void updateTargetCirc();
+    void publishPosition();
+    void publishThumb();
+    void publishOnTF();
+    void publishTargetOnTF();
+    void ds(Eigen::Vector2d x, double r_value);
+    void computeForce();
+    void updateGrabState(const std_msgs::Int8 &msg);
+    void admittanceControl();
+
+    float deadzone(float input, float disturbance, float threshold);
+    void PublishFuturePath();
+    void ds_simulation(Eigen::Vector2d x, double r_value);
+
 
     // Object related functions
     // void getObjectPose();
