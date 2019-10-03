@@ -321,7 +321,6 @@ class HandManip
     void updateTarget();
     void updateTargetGrasp();
     void ds(Eigen::Vector2d x, double r_value);
-    void computeForce();
     void updateGrabState(const std_msgs::Int8 &msg);
 
     float deadzone(float input, float disturbance, float threshold);

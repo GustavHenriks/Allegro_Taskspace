@@ -235,8 +235,6 @@ void HandManip::run()
             updateTargetGrasp();
             computeCommand();
             publishData();
-            computeForce();
-
             //-----------------------------------------//
             //------------Save for Output--------------//
             //-----------------------------------------//
@@ -703,11 +701,11 @@ void HandManip::updateTargetGrasp()
    else if (_grab == 1 && _grab_received == 0 && _start == false)
    {
       _count++;
-         if (_count >= 100)
-         {
-            _start = true;
-            _grasp_offset = 0;
-         }
+      if (_count >= 100)
+      {
+         _start = true;
+         _grasp_offset = 0;
+      }
    }
    else if (_grab == 0)
    {
@@ -757,23 +755,6 @@ void HandManip::updateTargetGrasp()
             _count_grasp = 0;
          }
       }
-   }
-}
-
-
-
-void HandManip::computeForce()
-{
-   for (int i = 0; i < NB_Fingers; i++)
-   {
-      Eigen::Vector4d tmp_torque_vec;
-      for (int j = 0; j < 4; j++)
-      {
-         tmp_torque_vec[i] = _current_joint_torque[4 * (i - 1) + j];
-      }
-      // std::cout<<tmp_torque_vec<<std::endl;
-      // std::cout<<_finger[i].JF.transpose()<<std::endl;
-      // std::cout<<tmp_torque_vec*_finger[i].JF.transpose()<<std::endl;
    }
 }
 
