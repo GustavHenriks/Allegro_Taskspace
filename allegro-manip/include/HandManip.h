@@ -311,9 +311,9 @@ class HandManip
     // New additions - Gustav
     void updateTarget();
     void updateTargetCirc();
-    void publishPosition();
     void publishThumb();
     void publishOnTF();
+    void publishPosition();
     void publishTargetOnTF();
     void ds(Eigen::Vector2d x, double r_value);
     void computeForce();
