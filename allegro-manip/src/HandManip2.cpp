@@ -129,12 +129,9 @@ bool HandManip::init()
    // filter section:
    filterGain = 0.2;
 
-   // To be Updated
-   // attractor of each ds -> will be reoved later as the ds should be defined from out side of this node
    _finger[0].X_target_inRef = {0.0795334, -0.02275253, 0.0836488};
    _finger[1].X_target_inRef = {0.0789154, 0.00851324, 0.0836488};
    _finger[2].X_target_inRef = {0.0607702, 0.0478584, 0.0563102};
-   // _finger[3].X_target_inRef = {0.0186801, -0.153905, -0.0230309};
    _finger[3].X_target_inRef = {0.0898508, -0.0586293, 0.0595195};
 
    // original attractor of each ds
