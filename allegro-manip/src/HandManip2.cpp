@@ -134,12 +134,6 @@ bool HandManip::init()
    _finger[2].X_target_inRef = {0.0607702, 0.0478584, 0.0563102};
    _finger[3].X_target_inRef = {0.0898508, -0.0586293, 0.0595195};
 
-   // original attractor of each ds
-   _finger[0].X_target_inRef_orig = _finger[0].X_target_inRef;
-   _finger[1].X_target_inRef_orig = _finger[1].X_target_inRef;
-   _finger[2].X_target_inRef_orig = _finger[2].X_target_inRef;
-   _finger[3].X_target_inRef_orig = _finger[3].X_target_inRef;
-
    // Ds:
    _finger[0].dsGain = 12; //5; //7000 for position Mode Controller
    _finger[1].dsGain = 7;  //10;
