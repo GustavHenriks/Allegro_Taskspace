@@ -142,7 +142,7 @@ bool HandManip::init()
 
    // Sending a minimun force
 
-   EPSILON_FORCE = 0.0001;
+   EPSILON_FORCE = 0.1; //Previously 0.0001
    LIMIT_FORCE = 5.00;
    jacobPsudoInvGain = 0.5;
    nullGainController = 1.5;
@@ -155,22 +155,29 @@ bool HandManip::init()
    // _null_joint_position[14] = 0.21883507832878082;
    // _null_joint_position[15] = 1.13;
 
+   // Null Space Equib Joint Position for one finger grasp
    _null_joint_position[1] = 0.75;
    _null_joint_position[2] = 0.2;
-   _null_joint_position[3] = 0.0;
-
-   // _null_joint_position[5] = 0.55;
-   // _null_joint_position[6] = 0.55;
-   // _null_joint_position[7] = 0.55;
-
-   // _null_joint_position[9] = 0.55;
-   // _null_joint_position[10] = 0.55;
-   // _null_joint_position[11] = 0.55;
+   _null_joint_position[3] = -0.2;
 
    _null_joint_position[13] = 1.58;
    _null_joint_position[13] = -0.2;
    _null_joint_position[14] = 0.55;
-   _null_joint_position[15] = 0.55;
+   _null_joint_position[15] = 0.2;
+
+   // Null Space Equib Joint Position for all fingers
+   // _null_joint_position[1] = 0.75;
+   // _null_joint_position[2] = 0.2;
+   // _null_joint_position[3] = 0.0;
+
+   // _null_joint_position[13] = 1.68;
+   // _null_joint_position[13] = 0.2;
+   // _null_joint_position[14] = 0.55;
+   // _null_joint_position[15] = 0.55;
+
+   // _null_joint_position[0] = -0.1;
+   // _null_joint_position[4] = -0.1;
+   // _null_joint_position[8] = -0.1;
 
    // initializing the passive Ds Controller
    _dimX = 3;
@@ -200,6 +207,11 @@ bool HandManip::init()
    _contact_force.setZero();
 
    _grasp_offset = 0;
+   _grasp_offset_2 = 0;
+   _grasp_offset0 = 0;
+   _grasp_offset1 = 0;
+   _grasp_offset2 = 0;
+   _grasp_offset3 = 0;
    _target_grasped = false;
    _grasp_published = false;
 }
@@ -233,8 +245,11 @@ void HandManip::run()
             //-----------------------------------------//
 
             updateTargetGrasp();
+            // updateTargetGraspAll();
             computeCommand();
             publishData();
+            // publishOnTF();
+            // publishTargetOnTF();
             //-----------------------------------------//
             //------------Save for Output--------------//
             //-----------------------------------------//
@@ -499,7 +514,7 @@ void HandManip::publishData()
    {
       _msgDesiredJointStates.position[i] = _desired_joint_position[i];
       // _msgDesiredJointStates.velocity[i] = _desired_joint_velocity[i];
-      // if (i==0 | i==1 | i==2 | i==3)
+      // if (i==12 | i==13)
       //    _msgDesiredJointStates.effort[i]=0;
       // else
       _msgDesiredJointStates.effort[i] = _desired_joint_torque[i];
@@ -679,11 +694,13 @@ void HandManip::updateFingersPosVel()
 // Test for DS for circular motions.
 void HandManip::updateTargetGrasp()
 {
-   _target_0 = {0.029216, -0.04275253, 0.1877781};
+   // _target_0 = {0.029216, -0.04275253, 0.1877781};
+   _target_0 = {0.0601682, -0.04275253, 0.1877781};
    _target_1 = {0.029216, 0.00851324, 0.1877781};
    _target_2 = {0.029216, 0.0478584, 0.1877781};
-   _target_3 = {0.1201682, -0.0186293, -0.0046098};
-   _target_dir = (_target_0 - _target_3) * 10;
+   _target_3 = {0.1201682+0.03, 0.0286293, -0.0046098};
+   _offset = {0,0.025,0};
+   _target_dir = (_target_0 + _offset - _target_3) * 10;
 
    if (_grab == 1 && _grab_received == 1)
    {
@@ -696,6 +713,7 @@ void HandManip::updateTargetGrasp()
       _grasp_published = false;
       _target_grasped = false;
       _count = 0;
+      _count_2 = 0;
       _count_grasp = 0;
    }
    else if (_grab == 1 && _grab_received == 0 && _start == false)
@@ -705,6 +723,7 @@ void HandManip::updateTargetGrasp()
       {
          _start = true;
          _grasp_offset = 0;
+         _grasp_offset_2 = 0;
       }
    }
    else if (_grab == 0)
@@ -718,21 +737,191 @@ void HandManip::updateTargetGrasp()
    }
    else if (_grab == 1 && _grab_received == 0 && _start == true && _target_grasped == false)
    {
-      if (_current_joint_torque[15] < 0.15)
-      {
-         if (_count >= 10)
-         {
-            _grasp_offset += 0.0005;
-            _count = 0;
-         }
-         _finger[0].X_target_inRef = _target_0 - _target_dir * _grasp_offset;
-         _finger[1].X_target_inRef = _target_1;
-         _finger[2].X_target_inRef = _target_2;
-         _finger[3].X_target_inRef = _target_3 + _target_dir * _grasp_offset;
+      // // METHOD 1
+      // if (_current_joint_torque[15] < 0.15)
+      // {
+      //    if (_count >= 10)
+      //    {
+      //       _grasp_offset += 0.0005;
+      //       _count = 0;
+      //    }
+      //    _finger[0].X_target_inRef = _target_0 - _target_dir * _grasp_offset;
+      //    _finger[1].X_target_inRef = _target_1;
+      //    _finger[2].X_target_inRef = _target_2;
+      //    _finger[3].X_target_inRef = _target_3 + _target_dir * _grasp_offset;
 
-         ROS_INFO_STREAM_THROTTLE(0.1, _finger[3].X_inRef[2] << " " << _finger[3].X_target_inRef[2]);
-         ROS_INFO_STREAM_THROTTLE(0.1, _current_joint_torque[3] << " " << _current_joint_torque[15]);
-         _count += 1;
+      //    ROS_INFO_STREAM_THROTTLE(0.1, _finger[3].X_inRef[2] << " " << _finger[3].X_target_inRef[2]);
+      //    ROS_INFO_STREAM_THROTTLE(0.1, _current_joint_torque[3] << " " << _current_joint_torque[15]);
+      //    _count += 1;
+      // }
+      // // METHOD 2
+      if (_current_joint_torque[3] < 0.25 || _current_joint_torque[15] < 0.25)
+      {
+         if (_current_joint_torque[3] < 0.25)
+         {
+            if (_count >= 10)
+            {
+               _grasp_offset += 0.001;
+               _count = 0;
+            }
+            _finger[0].X_target_inRef = _target_0 - _target_dir * _grasp_offset;
+
+            // ROS_INFO_STREAM_THROTTLE(0.1, _finger[3].X_inRef[2] << " " << _finger[3].X_target_inRef[2]);
+            // ROS_INFO_STREAM_THROTTLE(0.1, _current_joint_torque[3] << " " << _current_joint_torque[15]);
+            _count += 1;
+         }
+         if (_current_joint_torque[15] < 0.25)
+         {
+            if (_count_2 >= 10)
+            {
+               _grasp_offset_2 += 0.002;
+               _count_2 = 0;
+            }
+            _finger[1].X_target_inRef = _target_1;
+            _finger[2].X_target_inRef = _target_2;
+            _finger[3].X_target_inRef = _target_3 + _target_dir * _grasp_offset_2;
+
+            // ROS_INFO_STREAM_THROTTLE(0.1, _finger[3].X_inRef[2] << " " << _finger[3].X_target_inRef[2]);
+            // ROS_INFO_STREAM_THROTTLE(0.1, _current_joint_torque[3] << " " << _current_joint_torque[15]);
+            _count_2 += 1;
+         }
+            ROS_INFO_STREAM_THROTTLE(0.1, _current_joint_torque[3] << " " << _grasp_offset << " " << _current_joint_torque[15] << " " << _grasp_offset_2);
+      }
+      else
+      {
+         _target_grasped = true;
+      }
+   }
+   else if (_grab == 1 && _grab_received == 0 && _start == true && _target_grasped == true)
+   {
+      if (_grasp_published == false)
+      {
+         if (_count_grasp <= 50)
+         {
+            _grasped_msg.data = 1;
+            _pubGrasp.publish(_grasped_msg);
+            _count_grasp += 1;
+         }
+         else
+         {
+            _grasp_published = true;
+            _count_grasp = 0;
+         }
+      }
+   }
+}
+
+void HandManip::updateTargetGraspAll()
+{
+   _target_0 = {0.029216, -0.04275253, 0.1877781};
+   _target_1 = {0.029216, 0.00851324, 0.1877781};
+   _target_2 = {0.029216, 0.0478584, 0.1877781};
+   _target_3 = {0.1201682, -0.0286293, -0.0046098 + 0.05};
+   _center = {0.07, -0.02, 0.12};
+   // All fingers goes to the middle of the hand
+   // _target_dir_0 = (_target_0 - _center) * 10;
+   // _target_dir_1 = (_target_1 - _center) * 10;
+   // _target_dir_2 = (_target_2 - _center) * 10;
+   // _target_dir_3 = (_target_3 - _center) * 10;
+   // Outside fingers go towards thumb initial position
+   _target_dir_0 = (_target_0 - _target_3) * 10;
+   _target_dir_1 = (_target_1 - _target_3) * 10;
+   _target_dir_2 = (_target_2 - _target_3) * 10;
+   _target_dir_3 = (_target_3 - _center) * 10;
+
+   if (_grab == 1 && _grab_received == 1)
+   {
+      _finger[0].X_target_inRef = _target_0;
+      _finger[1].X_target_inRef = _target_1;
+      _finger[2].X_target_inRef = _target_2;
+      _finger[3].X_target_inRef = _target_3;
+      _grab_received = 0;
+      _start = false;
+      _grasp_published = false;
+      _target_grasped = false;
+      _count0 = 0;
+      _count1 = 0;
+      _count2 = 0;
+      _count3 = 0;
+      _grasp_offset0 = 0;
+      _grasp_offset1 = 0;
+      _grasp_offset2 = 0;
+      _grasp_offset3 = 0;
+   }
+   else if (_grab == 1 && _grab_received == 0 && _start == false)
+   {
+      // ROS_INFO_STREAM_THROTTLE(1, "first loop");
+      _count++;
+      if (_count >= 100)
+      {
+         _start = true;
+         _grasp_offset0 = 0;
+         _grasp_offset1 = 0;
+         _grasp_offset2 = 0;
+         _grasp_offset3 = 0;
+      }
+   }
+   else if (_grab == 0)
+   {
+      _finger[0].X_target_inRef = _target_0;
+      _finger[1].X_target_inRef = _target_1;
+      _finger[2].X_target_inRef = _target_2;
+      _finger[3].X_target_inRef = _target_3;
+      ROS_INFO_STREAM_THROTTLE(1, _finger[3].X_inRef[2]);
+      _start = false;
+   }
+   else if (_grab == 1 && _grab_received == 0 && _start == true && _target_grasped == false)
+   {
+      // ROS_INFO_STREAM_THROTTLE(1, "second loop");
+
+      if (_current_joint_torque[3] < 0.1 || _current_joint_torque[7] < 0.1 || _current_joint_torque[11] < 0.1 || _current_joint_torque[15] < 0.1)
+      {
+         if (_current_joint_torque[3] < 0.1)
+         {
+            if (_count0 >= 10)
+            {
+               _grasp_offset0 += 0.001;
+               _count0 = 0;
+            }
+            _finger[0].X_target_inRef = _target_0 - _target_dir_0 * _grasp_offset0;
+
+            _count0 += 1;
+         }
+         if (_current_joint_torque[7] < 0.1)
+         {
+            if (_count1 >= 10)
+            {
+               _grasp_offset1 += 0.001;
+               _count1 = 0;
+            }
+            _finger[1].X_target_inRef = _target_1 - _target_dir_1 * _grasp_offset1;
+
+            _count1 += 1;
+         }
+         if (_current_joint_torque[11] < 0.1)
+         {
+            if (_count2 >= 10)
+            {
+               _grasp_offset2 += 0.001;
+               _count2 = 0;
+            }
+            _finger[2].X_target_inRef = _target_2 - _target_dir_2 * _grasp_offset2;
+            _count2 += 1;
+         }
+         if (_current_joint_torque[15] < 0.1)
+         {
+            if (_count3 >= 10)
+            {
+               _grasp_offset3 += 0.001;
+               _count3 = 0;
+            }
+            _finger[3].X_target_inRef = _target_3 - _target_dir_3 * _grasp_offset3;
+
+            // ROS_INFO_STREAM_THROTTLE(0.1, _finger[3].X_inRef[2] << " " << _finger[3].X_target_inRef[2]);
+            // ROS_INFO_STREAM_THROTTLE(0.1, _current_joint_torque[3] << " " << _current_joint_torque[15]);
+            _count3 += 1;
+         }
+         ROS_INFO_STREAM_THROTTLE(0.1, _current_joint_torque[3] << " " << _current_joint_torque[7] << " " << _current_joint_torque[11] << " " << _current_joint_torque[15]);
       }
       else
       {
@@ -780,4 +969,43 @@ float HandManip::deadzone(float input, float disturbance, float threshold)
    }
 
    return input;
+}
+
+
+void HandManip::publishOnTF()
+{
+   for (int i = 3; i < NB_Fingers; i++)
+   {
+      tf::Transform transform, transform2, transform3;
+      tf::Quaternion q;
+      q.setRotation(tf::Vector3(1, 0, 0), M_PI);
+      transform2.setRotation(q);
+      q.setRotation(tf::Vector3(0, 1, 0), -M_PI / 2);
+      transform3.setRotation(q);
+      transform.setOrigin(tf::Vector3(_finger[i].X_inRef[0], _finger[i].X_inRef[1], _finger[i].X_inRef[2]));
+      q.setRotation(tf::Vector3(1, 0, 0), M_PI);
+      transform = transform3 * transform2 * transform;
+      transform.setRotation(q);
+      transform.setOrigin(transform.getOrigin() + tf::Vector3(0, 0, 0.081));
+      _br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "iiwa_link_ee", "finger" + std::to_string(i)));
+      // _br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "hand_root", "finger" + std::to_string(i)));
+   }
+}
+
+void HandManip::publishTargetOnTF()
+{
+   tf::Transform transform, transform2, rot;
+   tf::Quaternion q;
+   q.setRotation(tf::Vector3(1, 0, 0), M_PI);
+   rot.setRotation(q);
+   transform.setOrigin(tf::Vector3(_finger[3].X_target_inRef[0], _finger[3].X_target_inRef[1], _finger[3].X_target_inRef[2]));
+   transform = rot * transform;
+   transform.setRotation(tf::Quaternion(0, 0, 0, 1));
+   _br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "palm_link", "thumbtarget"));
+   transform2.setOrigin(tf::Vector3(_finger[3].X_inRef[0], _finger[3].X_inRef[1], _finger[3].X_inRef[2]));
+   transform2 = rot * transform2;
+   transform2.setRotation(tf::Quaternion(0, 0, 0, 1));
+   _br.sendTransform(tf::StampedTransform(transform2, ros::Time::now(), "palm_link", "thumbpos"));
+   // std::cout<< _finger[3].X_inRef[0] << std::endl;
+   // _br.sendTransform(tf::StampedTransform(transform2, ros::Time::now(), "iiwa_link_ee", "thumbpos"));
 }

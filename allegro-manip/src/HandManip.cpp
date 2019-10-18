@@ -150,7 +150,7 @@ bool HandManip::init()
 
    // Sending a minimun force
 
-   EPSILON_FORCE = 0.0001;
+   EPSILON_FORCE = 0.001;
    LIMIT_FORCE = 5.00;
    jacobPsudoInvGain = 0.5;
    nullGainController = 0.1;
@@ -381,7 +381,7 @@ void HandManip::computeCommandTqMode()
 
       // _finger[3].torque_command = _finger[3].JF.transpose() * ((-40-5*cos(_theta_circle / 2+M_PI/4)) * (_finger[3].V_inRef - _finger[3].V_ds_inRef) + _contact_force); //-32 used before
       // std::cout<<(-40-5*cos(_theta_circle / 2+M_PI/4))<<std::endl;
-      _finger[3].torque_command = _finger[3].JF.transpose() * (-35* (_finger[3].V_inRef - _finger[3].V_ds_inRef) + _contact_force); //-32 used before
+      _finger[3].torque_command = _finger[3].JF.transpose() * (-50* (_finger[3].V_inRef - _finger[3].V_ds_inRef) + _contact_force); //-32 used before
    }
    else
    {

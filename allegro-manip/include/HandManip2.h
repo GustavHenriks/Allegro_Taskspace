@@ -267,13 +267,19 @@ class HandManip
 
 
     // Grasping
-    double _grasp_offset;
+    double _grasp_offset, _grasp_offset_2;
+    double _grasp_offset0,_grasp_offset1,_grasp_offset2,_grasp_offset3;
+    int _count_2;
+    double _grasp_torque_limit;
+    int _count0, _count1, _count2, _count3;
     bool _target_grasped, _grasp_published;
     ros::Publisher _pubGrasp;
     int _count_grasp;
     std_msgs::Int8 _grasped_msg;
     Eigen::Vector3d _target_0,_target_1,_target_2,_target_3;
-    Eigen::Vector3d _target_dir;
+    Eigen::Vector3d _target_dir, _center;
+    Eigen::Vector3d _target_dir_0,_target_dir_1,_target_dir_2,_target_dir_3;
+    Eigen::Vector3d _offset;
 
     // For the Grasp Matrix:
   public:
@@ -320,10 +326,13 @@ class HandManip
     // New additions - Gustav
     void updateTarget();
     void updateTargetGrasp();
+    void updateTargetGraspAll();
     void ds(Eigen::Vector2d x, double r_value);
     void updateGrabState(const std_msgs::Int8 &msg);
 
     float deadzone(float input, float disturbance, float threshold);
+    void publishOnTF();
+    void publishTargetOnTF();
 
 
     // Object related functions
