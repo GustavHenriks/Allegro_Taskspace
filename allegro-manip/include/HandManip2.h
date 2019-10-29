@@ -280,6 +280,7 @@ class HandManip
     Eigen::Vector3d _target_dir, _center;
     Eigen::Vector3d _target_dir_0,_target_dir_1,_target_dir_2,_target_dir_3;
     Eigen::Vector3d _offset;
+    double _torque_limit;
 
     // For the Grasp Matrix:
   public:
@@ -327,6 +328,7 @@ class HandManip
     void updateTarget();
     void updateTargetGrasp();
     void updateTargetGraspAll();
+    void updateTargetGraspThree();
     void ds(Eigen::Vector2d x, double r_value);
     void updateGrabState(const std_msgs::Int8 &msg);
 

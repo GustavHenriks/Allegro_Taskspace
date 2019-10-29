@@ -138,12 +138,12 @@ bool HandManip::init()
    _finger[0].dsGain = 12; //5; //7000 for position Mode Controller
    _finger[1].dsGain = 7;  //10;
    _finger[2].dsGain = 7;  //12;
-   _finger[3].dsGain = 7;  //20 used for admittance, 50 for circular motions
+   _finger[3].dsGain = 12;  //20 used for admittance, 50 for circular motions
 
    // Sending a minimun force
 
    EPSILON_FORCE = 0.1; //Previously 0.0001
-   LIMIT_FORCE = 5.00;
+   LIMIT_FORCE = 1.0;
    jacobPsudoInvGain = 0.5;
    nullGainController = 1.5;
    // Null Space Equib Joint Position
@@ -160,10 +160,11 @@ bool HandManip::init()
    _null_joint_position[2] = 0.2;
    _null_joint_position[3] = -0.2;
 
-   _null_joint_position[13] = 1.58;
-   _null_joint_position[13] = -0.2;
-   _null_joint_position[14] = 0.55;
-   _null_joint_position[15] = 0.2;
+   _null_joint_position[12] = 1.78;
+   // _null_joint_position[13] = -0.4;
+   _null_joint_position[13] = -0;
+   _null_joint_position[14] = .3;
+   _null_joint_position[15] = -0;
 
    // Null Space Equib Joint Position for all fingers
    // _null_joint_position[1] = 0.75;
@@ -181,6 +182,11 @@ bool HandManip::init()
 
    // initializing the passive Ds Controller
    _dimX = 3;
+
+   // _finger[0].eigenValue = 5.0;
+   // _finger[1].eigenValue = 10.0;
+   // _finger[2].eigenValue = 7.0;
+   // _finger[3].eigenValue = 5.0;
 
    _finger[0].eigenValue = 5.0;
    _finger[1].eigenValue = 10.0;
@@ -246,6 +252,7 @@ void HandManip::run()
 
             updateTargetGrasp();
             // updateTargetGraspAll();
+            // updateTargetGraspThree();
             computeCommand();
             publishData();
             // publishOnTF();
@@ -472,6 +479,9 @@ void HandManip::nullSpaceControl()
       _null_joint_torque[j + 4] = nullMat_1.row(j) * _finger[1].temp_joint_torque;
       _null_joint_torque[j + 8] = nullMat_2.row(j) * _finger[2].temp_joint_torque;
       _null_joint_torque[j + 12] = nullMat_3.row(j) * _finger[3].temp_joint_torque;
+      if (j==3){
+         _null_joint_torque[j + 12] = nullMat_3.row(j) *1* _finger[3].temp_joint_torque;
+      }
    }
 
    for (int j = 0; j < DOF_JOINTS; j++)
@@ -493,6 +503,12 @@ void HandManip::updateHandStates(const sensor_msgs::JointState &msg)
          _current_joint_position[i] = msg.position[i];
          _current_joint_velocity[i] = 0.01 * msg.velocity[i] + 0.99 * _current_joint_velocity[i];
          _current_joint_torque[i] = 0.01 * msg.effort[i] + 0.99 * _current_joint_torque[i]; //Filtering since oscillations occur for higher gains
+         if (_current_joint_torque[i] > 0.7)
+         {
+            ROS_INFO_STREAM_THROTTLE(1, "Torque overload for ");
+            ROS_INFO_STREAM_THROTTLE(1, i);
+            ROS_INFO_STREAM_THROTTLE(1, _current_joint_torque[i]);
+         }
       }
       else
       {
@@ -501,6 +517,12 @@ void HandManip::updateHandStates(const sensor_msgs::JointState &msg)
          if ((msg.effort[i] != msg.effort[i]) == false)
          {
             _current_joint_torque[i] = 0.01 * msg.effort[i] + 0.99 * _current_joint_torque[i]; //Filtering since oscillations occur for higher gains
+         }
+         if (_current_joint_torque[i] > 0.7)
+         {
+            ROS_INFO_STREAM_THROTTLE(1, "Torque overload for ");
+            ROS_INFO_STREAM_THROTTLE(1, i);
+            ROS_INFO_STREAM_THROTTLE(1, _current_joint_torque[i]);
          }
          // _old_effort[i]=_current_joint_torque[i];
       }
@@ -698,9 +720,10 @@ void HandManip::updateTargetGrasp()
    _target_0 = {0.0601682, -0.04275253, 0.1877781};
    _target_1 = {0.029216, 0.00851324, 0.1877781};
    _target_2 = {0.029216, 0.0478584, 0.1877781};
-   _target_3 = {0.1201682+0.03, 0.0286293, -0.0046098};
-   _offset = {0,0.025,0};
+   _target_3 = {0.1201682 + 0.03, 0.0286293, -0.0046098};
+   _offset = {0, 0.01, 0};
    _target_dir = (_target_0 + _offset - _target_3) * 10;
+   _torque_limit = 0.5; //exp1=0.15, exp2=0.25
 
    if (_grab == 1 && _grab_received == 1)
    {
@@ -755,9 +778,9 @@ void HandManip::updateTargetGrasp()
       //    _count += 1;
       // }
       // // METHOD 2
-      if (_current_joint_torque[3] < 0.25 || _current_joint_torque[15] < 0.25)
+      if (_current_joint_torque[3] < _torque_limit || _current_joint_torque[15] < _torque_limit)
       {
-         if (_current_joint_torque[3] < 0.25)
+         if (_current_joint_torque[3] < _torque_limit)
          {
             if (_count >= 10)
             {
@@ -770,11 +793,11 @@ void HandManip::updateTargetGrasp()
             // ROS_INFO_STREAM_THROTTLE(0.1, _current_joint_torque[3] << " " << _current_joint_torque[15]);
             _count += 1;
          }
-         if (_current_joint_torque[15] < 0.25)
+         if (_current_joint_torque[15] < _torque_limit)
          {
             if (_count_2 >= 10)
             {
-               _grasp_offset_2 += 0.002;
+               _grasp_offset_2 += 0.001;
                _count_2 = 0;
             }
             _finger[1].X_target_inRef = _target_1;
@@ -785,7 +808,7 @@ void HandManip::updateTargetGrasp()
             // ROS_INFO_STREAM_THROTTLE(0.1, _current_joint_torque[3] << " " << _current_joint_torque[15]);
             _count_2 += 1;
          }
-            ROS_INFO_STREAM_THROTTLE(0.1, _current_joint_torque[3] << " " << _grasp_offset << " " << _current_joint_torque[15] << " " << _grasp_offset_2);
+         ROS_INFO_STREAM_THROTTLE(0.1, _current_joint_torque[3] << " " << _grasp_offset << " " << _current_joint_torque[15] << " " << _grasp_offset_2);
       }
       else
       {
@@ -912,7 +935,7 @@ void HandManip::updateTargetGraspAll()
          {
             if (_count3 >= 10)
             {
-               _grasp_offset3 += 0.001;
+               _grasp_offset3 += 0.002;
                _count3 = 0;
             }
             _finger[3].X_target_inRef = _target_3 - _target_dir_3 * _grasp_offset3;
@@ -922,6 +945,128 @@ void HandManip::updateTargetGraspAll()
             _count3 += 1;
          }
          ROS_INFO_STREAM_THROTTLE(0.1, _current_joint_torque[3] << " " << _current_joint_torque[7] << " " << _current_joint_torque[11] << " " << _current_joint_torque[15]);
+      }
+      else
+      {
+         _target_grasped = true;
+      }
+   }
+   else if (_grab == 1 && _grab_received == 0 && _start == true && _target_grasped == true)
+   {
+      if (_grasp_published == false)
+      {
+         if (_count_grasp <= 50)
+         {
+            _grasped_msg.data = 1;
+            _pubGrasp.publish(_grasped_msg);
+            _count_grasp += 1;
+         }
+         else
+         {
+            _grasp_published = true;
+            _count_grasp = 0;
+         }
+      }
+   }
+}
+
+void HandManip::updateTargetGraspThree()
+{
+   _target_0 = {0.029216, -0.04275253, 0.1877781};
+   _target_1 = {0.029216, 0.00851324, 0.1877781};
+   _target_2 = {0.029216, 0.0478584, 0.1877781};
+   _target_3 = {0.1201682, -0.0286293, -0.0046098 + 0.05};
+   _offset = {0, 0.05, 0};
+   _center = {0.07, 0.01, 0.12};
+   // All fingers goes to the middle of the hand
+   // _target_dir_0 = (_target_0 - _center) * 10;
+   // _target_dir_1 = (_target_1 - _center) * 10;
+   // _target_dir_2 = (_target_2 - _center) * 10;
+   // _target_dir_3 = (_target_3 - _center) * 10;
+   // Outside fingers go towards thumb initial position
+   _target_dir_0 = (_target_0 - _center) * 10;
+   _target_dir_2 = (_target_2 - _center) * 10;
+   _target_dir_3 = (_target_3 - _offset - _center) * 10;
+
+   if (_grab == 1 && _grab_received == 1)
+   {
+      _finger[0].X_target_inRef = _target_0;
+      _finger[1].X_target_inRef = _target_1;
+      _finger[2].X_target_inRef = _target_2;
+      _finger[3].X_target_inRef = _target_3;
+      _grab_received = 0;
+      _start = false;
+      _grasp_published = false;
+      _target_grasped = false;
+      _count0 = 0;
+      _count2 = 0;
+      _count3 = 0;
+      _grasp_offset0 = 0;
+      _grasp_offset2 = 0;
+      _grasp_offset3 = 0;
+   }
+   else if (_grab == 1 && _grab_received == 0 && _start == false)
+   {
+      // ROS_INFO_STREAM_THROTTLE(1, "first loop");
+      _count++;
+      if (_count >= 100)
+      {
+         _start = true;
+         _grasp_offset0 = 0;
+         _grasp_offset2 = 0;
+         _grasp_offset3 = 0;
+      }
+   }
+   else if (_grab == 0)
+   {
+      _finger[0].X_target_inRef = _target_0;
+      _finger[1].X_target_inRef = _target_1;
+      _finger[2].X_target_inRef = _target_2;
+      _finger[3].X_target_inRef = _target_3;
+      ROS_INFO_STREAM_THROTTLE(1, _finger[3].X_inRef[2]);
+      _start = false;
+   }
+   else if (_grab == 1 && _grab_received == 0 && _start == true && _target_grasped == false)
+   {
+      // ROS_INFO_STREAM_THROTTLE(1, "second loop");
+
+      if (_current_joint_torque[3] < 0.1 || _current_joint_torque[11] < 0.1 || _current_joint_torque[15] < 0.1)
+      {
+         if (_current_joint_torque[3] < 0.1)
+         {
+            if (_count0 >= 10)
+            {
+               _grasp_offset0 += 0.001;
+               _count0 = 0;
+            }
+            _finger[0].X_target_inRef = _target_0 - _target_dir_0 * _grasp_offset0;
+
+            _count0 += 1;
+         }
+         if (_current_joint_torque[11] < 0.1)
+         {
+            if (_count2 >= 10)
+            {
+               _grasp_offset2 += 0.001;
+               _count2 = 0;
+            }
+            _finger[2].X_target_inRef = _target_2 - _target_dir_2 * _grasp_offset2;
+            _count2 += 1;
+         }
+         if (_current_joint_torque[15] < 0.1)
+         {
+            if (_count3 >= 10)
+            {
+               _grasp_offset3 += 0.001;
+               _count3 = 0;
+            }
+            _finger[3].X_target_inRef = _target_3 - _target_dir_3 * _grasp_offset3;
+
+            // ROS_INFO_STREAM_THROTTLE(0.1, _finger[3].X_inRef[2] << " " << _finger[3].X_target_inRef[2]);
+            // ROS_INFO_STREAM_THROTTLE(0.1, _current_joint_torque[3] << " " << _current_joint_torque[15]);
+            _count3 += 1;
+         }
+         ROS_INFO_STREAM_THROTTLE(0.1, _current_joint_torque[3] << " " << _current_joint_torque[11] << " " << _current_joint_torque[15]);
       }
       else
       {
@@ -970,7 +1115,6 @@ float HandManip::deadzone(float input, float disturbance, float threshold)
 
    return input;
 }
-
 
 void HandManip::publishOnTF()
 {
